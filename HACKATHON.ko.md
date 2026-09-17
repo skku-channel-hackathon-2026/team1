@@ -6,11 +6,11 @@ Node.js 24와 pnpm 11.24.0을 사용합니다. `pnpm-lock.yaml`을 함께 커밋
 
 ## 초대 수락 후 확인할 것
 
-| 권한                 | 할 수 있는 일                            |
-| -------------------- | ---------------------------------------- |
-| 팀 GitHub 레포 Write | 코드·SQL 수정, 브랜치·PR 생성, main push |
-| 채널톡 앱 개발 권한  | 앱 설정·익스텐션·권한 확인 및 개발       |
-| 팀 전용 채널 멤버    | 설치된 앱 실행과 팀 테스트               |
+| 권한                  | 할 수 있는 일                            |
+| --------------------- | ---------------------------------------- |
+| 팀 GitHub 레포 Write  | 코드·SQL 수정, 브랜치·PR 생성, main push |
+| 채널톡 앱 개발 권한   | 앱 설정·익스텐션·권한 확인 및 개발       |
+| 공통 해커톤 채널 멤버 | 설치된 앱 실행과 팀 테스트               |
 
 Cloudflare 계정 권한 없이도 코드 배포가 가능합니다. 원격 DB 마이그레이션, 서버 비밀 키 변경,
 배포 로그 확인은 운영진에게 요청하세요. 앱 개발 권한과 채널 멤버 권한은 별개입니다.
@@ -18,14 +18,14 @@ Cloudflare 계정 권한 없이도 코드 배포가 가능합니다. 원격 DB �
 team1 리소스:
 
 - 레포: https://github.com/skku-channel-hackathon-2026/team1
-- 채널: https://channel.works/8240x/team-chat/groups/609174
+- 채널: https://channel.works/xd1l0/team-chat/groups/609235
 - 앱 설정: https://channel.works/-/developers/apps/6aab7be513f451690580/general
 - 서버: https://skku-team1.skku-hackathon-2026.workers.dev
 - 서버 확인: `/api/health`, DB 연결 확인: `/api/ready`
 - Function Endpoint: `https://skku-team1.skku-hackathon-2026.workers.dev/functions`
 - WAM Endpoint: `https://skku-team1.skku-hackathon-2026.workers.dev/resource/wam`
 
-위 주소는 team1 전용입니다. 다른 팀은 운영진이 전달한 주소와 앱을 사용하세요.
+서버와 앱은 팀별로 분리되며, 채널과 검증 그룹은 함께 사용합니다. 팀별 정보는 [TEAM.md](TEAM.md)를 확인하세요.
 이미 연결된 Endpoint에 `/v1`이나 `/tutorial`을 추가하지 마세요.
 
 ## 코드 구조
