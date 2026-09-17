@@ -1,5 +1,9 @@
 # Channel App tutorial — TypeScript
 
+> **성균관대 해커톤 팀 개발 안내**: [시작하기·배포·DB 마이그레이션](HACKATHON.ko.md) · [Desk 검증 기록](docs/desk-qa.md)
+> GitHub Write, 앱 개발 권한, 전용 채널 초대를 수락한 뒤 위 가이드부터 확인하세요.
+> `main` push는 코드 배포 대상이며, 원격 DB 마이그레이션과 익스텐션 등록 갱신은 운영진에게 별도로 요청합니다.
+
 [English](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md)
 
 SKKU hackathon teams: see the [Cloudflare deployment and database guide](HACKATHON.ko.md).

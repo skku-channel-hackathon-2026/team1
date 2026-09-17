@@ -1,123 +1,198 @@
-# 성균관대 해커톤 앱 스타터
+# 성균관대 해커톤 개발 가이드
 
-공식 app-tutorial-ts 기반입니다. 팀별로 이 저장소를 복제하고 앱 ID와 비밀 키를 분리합니다.
-SDK 0.17.2, pnpm 11.24.0, Node.js 24를 사용합니다. 행사 중 의존성 버전은 임의로 변경하지 않습니다.
+공식 `channel-io/app-tutorial-ts`와 Channel App SDK 0.17.2를 기반으로 합니다.
+서버는 Cloudflare Workers Free, DB는 팀별 Cloudflare D1(SQLite), 화면은 React WAM입니다.
+Node.js 24와 pnpm 11.24.0을 사용합니다. `pnpm-lock.yaml`을 함께 커밋하세요.
 
-## 로컬 개발
+## 초대 수락 후 확인할 것
+
+| 권한                 | 할 수 있는 일                            |
+| -------------------- | ---------------------------------------- |
+| 팀 GitHub 레포 Write | 코드·SQL 수정, 브랜치·PR 생성, main push |
+| 채널톡 앱 개발 권한  | 앱 설정·익스텐션·권한 확인 및 개발       |
+| 팀 전용 채널 멤버    | 설치된 앱 실행과 팀 테스트               |
+
+Cloudflare 계정 권한 없이도 코드 배포가 가능합니다. 원격 DB 마이그레이션, 서버 비밀 키 변경,
+배포 로그 확인은 운영진에게 요청하세요. 앱 개발 권한과 채널 멤버 권한은 별개입니다.
+
+team1 리소스:
+
+- 레포: https://github.com/skku-channel-hackathon-2026/team1
+- 채널: https://channel.works/8240x/team-chat/groups/609174
+- 앱 설정: https://channel.works/-/developers/apps/6aab7be513f451690580/general
+- 서버: https://skku-team1.skku-hackathon-2026.workers.dev
+- 서버 확인: `/api/health`, DB 연결 확인: `/api/ready`
+- Function Endpoint: `https://skku-team1.skku-hackathon-2026.workers.dev/functions`
+- WAM Endpoint: `https://skku-team1.skku-hackathon-2026.workers.dev/resource/wam`
+
+위 주소는 team1 전용입니다. 다른 팀은 운영진이 전달한 주소와 앱을 사용하세요.
+이미 연결된 Endpoint에 `/v1`이나 `/tutorial`을 추가하지 마세요.
+
+## 코드 구조
+
+| 위치                               | 용도                           |
+| ---------------------------------- | ------------------------------ |
+| `server/src/tutorial.functions.ts` | Function·커맨드 구현           |
+| `wam/src/pages/Send/Send.tsx`      | WAM 화면                       |
+| `packages/shared/src/index.ts`     | 공유 타입·Zod 입력/출력 스키마 |
+| `server/src/database.ts`           | 현재 요청의 D1 접근            |
+| `cloudflare/migrations/`           | 버전별 DB 스키마 변경 SQL      |
+| `cloudflare/worker.mjs`            | Workers HTTP 진입점            |
+| `wrangler.jsonc`                   | 로컬 실행과 팀 DB 바인딩       |
+
+## 로컬에서 서버와 DB 실행
 
 ```sh
 corepack pnpm install --frozen-lockfile
-cp server/.env.example server/.env
-corepack pnpm build
-corepack pnpm dev:server
-# 별도 터미널
-corepack pnpm dev:wam
+corepack pnpm build:cloudflare
 ```
 
-서버 Function은 `server/src/tutorial.functions.ts`, 화면은 `wam/src/pages/Send/Send.tsx`,
-공유 입력·출력 타입은 `packages/shared/src/index.ts`에서 수정합니다.
-서버 로컬 실행은 기본적으로 앱을 자동 등록합니다. 배포 URL이 등록된 앱을 로컬에서 실험할 때는
-`AUTO_REGISTER=false`로 실행하고, 별도 개발 앱을 사용하세요.
+레포 루트에 `.dev.vars`를 만듭니다. 다음 값은 오프라인 로컬 테스트용 가짜 값입니다.
+실제 채널톡 API 호출에는 사용할 수 없습니다. 이 파일은 Git에서 제외됩니다.
 
-## 현재 배포 대상: Cloudflare Workers Free + D1
-
-유료 플랜이나 자동 과금 Trial을 사용하지 않습니다. 계정당 D1 개수와 무료 사용량 한도가 있으므로
-11개 팀 전체 배치는 계정 운영 조건 확인 후 확정합니다. team1은 원격 Worker·D1 연결과 앱 설치를 완료했습니다.
-
-- 팀별 Worker 1개와 D1 1개를 사용합니다. 템플릿의 `wrangler.jsonc` DB ID는 자리표시자이며, team1에는 실제 DB가 연결되어 있습니다.
-- Cloudflare 서버 진입점은 `cloudflare/worker.mjs`, SQL 마이그레이션은 `cloudflare/migrations`입니다.
-- NestJS HTTP와 SDK Function은 유지합니다. 선택 기능인 WebSocket, microservices, class-validator,
-  class-transformer는 이 Workers 빌드에서 제외합니다. 입력 검증은 기존 Zod를 사용합니다.
-- `server/src/database.ts`의 `getDatabase()`는 현재 요청에 연결된 해당 팀 D1만 반환합니다.
-- DB 예제 테이블 `app_records`에는 id, JSON 값, 생성/수정 시각이 있습니다. UPDATE 시 updated_at은
-  쿼리에서 갱신하세요. 팀 기능에 맞는 테이블을 마이그레이션으로 추가합니다.
+```dotenv
+APP_ID=local-test-app
+APP_SECRET=local-test-secret
+SIGNING_KEY=1111111111111111111111111111111111111111111111111111111111111111
+APP_STORE_URL=https://app-store-api.channel.io
+```
 
 ```sh
-corepack pnpm build:cloudflare
-# .dev.vars에 로컬 테스트용 APP_ID, APP_SECRET, SIGNING_KEY를 입력합니다.
 corepack pnpm db:migrate:local
 corepack pnpm dev:cloudflare
 ```
 
+출력된 localhost 주소에서 `/api/health`, `/api/ready`를 확인합니다.
+화면을 수정한 뒤에는 `corepack pnpm build:cloudflare`로 WAM 정적 파일도 다시 빌드합니다.
+UI만 빠르게 개발할 때는 `corepack pnpm dev:wam`을 사용할 수 있지만,
+단독 브라우저에는 Desk의 WAM 컨텍스트가 없으므로 실제 연결 검증은 전용 채널에서 해야 합니다.
+
+기존 `dev:server`는 Node 서버만 실행하며 D1을 제공하지 않습니다. DB 사용 기능은 Wrangler에서
+실행하세요. 별도 개발 앱을 로컬 HTTPS 터널과 연결할 때는 운영진과 Endpoint를 조율합니다.
+팀이 공유하는 배포 앱의 Endpoint를 개인 localhost 주소로 바꾸지 마세요.
+
+## DB 마이그레이션: SQL 파일로 관리
+
+현재 `0001_initial.sql`에 `app_records` 테이블이 있습니다. D1이 적용 이력을 기록하므로
+이미 적용한 파일은 다시 실행하지 않습니다. **적용한 파일을 수정하지 말고 새 파일을 추가**하세요.
+
+1. 작업 브랜치에서 마이그레이션을 생성합니다.
+
+   ```sh
+   corepack pnpm exec wrangler d1 migrations create DB add_members
+   ```
+
+2. 생성된 `cloudflare/migrations/0002_add_members.sql`에 SQL을 작성합니다. 예:
+
+   ```sql
+   CREATE TABLE members (
+     id TEXT PRIMARY KEY,
+     name TEXT NOT NULL,
+     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+   );
+   ```
+
+3. 로컬에 적용하고 데이터를 넣고 읽는 흐름을 확인합니다.
+
+   ```sh
+   corepack pnpm db:migrate:local
+   corepack pnpm exec wrangler d1 execute DB --local --command="SELECT name FROM sqlite_master WHERE type = 'table';"
+   ```
+
+4. SQL과 코드를 커밋하고, **새 스키마에 의존하는 코드를 main에 합치기 전에** 운영진에게 적용을
+   요청합니다. 팀명, PR/커밋 URL, SQL 파일명, 데이터 삭제 여부, 필요한 배포 순서를 전달하세요.
+5. 운영진의 원격 적용 완료를 확인한 뒤 의존 코드를 main에 합칩니다.
+
+원격 적용은 자동 배포에 포함되지 않습니다. 운영진은 해당 팀 레포와 DB ID를 확인한 뒤 실행합니다.
+
+```sh
+# 운영진 전용: 현재 설정이 해당 팀 DB를 가리키는지 먼저 확인
+corepack pnpm exec wrangler d1 migrations list DB --remote
+corepack pnpm exec wrangler d1 migrations apply DB --remote
+```
+
+앱 재배포는 DB를 초기화하지 않습니다. 로컬 DB와 원격 DB는 별개이며 자동 동기화되지 않습니다.
+`.wrangler` 안의 로컬 DB를 Git에 올리지 마세요. 적용 순번이 충돌하면 미적용 파일의 순서를
+팀 내에서 정리합니다. 컬럼·테이블 삭제는 기존 코드와 데이터를 깨뜨릴 수 있으므로 별도 협의합니다.
+배포 코드를 되돌려도 DB 스키마는 되돌아가지 않습니다. 보통 새 보정 SQL로 수정하고,
+데이터 복구가 필요하면 추가 변경 전에 운영진에게 요청하세요.
+
+### Function에서 D1 사용
+
 ```ts
 import { getDatabase } from "./database.js";
+
 const record = await getDatabase()
   .prepare("SELECT value_json FROM app_records WHERE id = ?")
   .bind(recordId)
   .first<{ value_json: string }>();
 ```
 
-기존 `dev:server`는 D1을 제공하지 않습니다. DB를 쓰는 기능은 Wrangler 로컬 런타임에서 개발하세요.
-실제 앱과 연결하려면 운영진이 원격 D1 생성·마이그레이션, 앱 자격 증명, 고정 Worker 주소 및
-Function/WAM Endpoint를 설정하고 등록·설치 검증을 해야 합니다.
+요청을 처리하는 Function 안에서 `getDatabase()`를 호출합니다. 모듈 초기화 시 호출하지 않습니다.
+사용자 입력은 SQL 문자열에 직접 이어 붙이지 말고 `.bind()`로 전달하세요.
+`app_records.value_json`에는 JSON 문자열을 저장하며, UPDATE 시 `updated_at`도 쿼리에서 갱신합니다.
+D1은 SQLite이므로 PostgreSQL/MySQL 전용 문법은 사용할 수 없습니다.
 
-### 팀별 자율 배포
+## 배포와 익스텐션 등록
 
-운영진 전용 배포 저장소가 각 팀 `main`의 새 커밋을 확인합니다. 팀별로 push하면 자기 Worker만
-배포됩니다. 초기 구현은 5분 주기이며 GitHub 스케줄 지연으로 더 늦어질 수 있습니다.
-같은 코드를 다시 배포하려면 빈 커밋을 push하거나 운영진에게 재배포를 요청합니다.
-team1은 컨트롤러가 활성화되어 있습니다. 나머지 팀은 운영진의 계정·DB·앱 설정 후 활성화합니다.
-배포 상태와 오류 로그는 운영진에게 확인합니다. GitHub Actions 무료 사용량 한도도 적용됩니다.
-
-Cloudflare 계정 토큰은 팀 레포에 저장하지 않습니다. 비밀정보 없는 빌드와 토큰을 사용하는 업로드를
-별도 실행 환경으로 분리하고, Worker 이름·계정·DB 연결은 운영진의 고정 매핑만 사용합니다.
-팀 코드가 운영진 설정을 변경해 다른 팀 DB를 연결할 수 없게 합니다.
-DB 마이그레이션은 코드 재배포와 별도이며 초기에는 운영진이 대상 DB와 SQL을 확인해 적용합니다.
-단순 재배포로 D1 데이터는 초기화되지 않습니다.
-
-### 파일럿 검증 상태
-
-2026-09-17 기준 team1의 원격 health·D1 readiness, HMAC 서명 검증/거부, WAM 정적 파일,
-D1 저장·조회·삭제, 채널톡 앱 설치와 채널톡을 통한 함수 호출, 운영진 GitHub Actions의 실제
-빌드·배포를 확인했습니다. 로컬 동시 호출과 두 레포 CI도 통과했습니다.
-
-- 서버: https://skku-team1.skku-hackathon-2026.workers.dev
-- 전용 채널: SKKU 2026 Team1 (253286)
-- 앱: SKKU 2026 Team1 / 커맨드 `/tutorial`
-
-무료 CPU 한도에서의 부하 시험과 Desk 내부 WAM의 메시지 전송 동작은 아직 검증하지 않았습니다.
-설치된 앱에서 WAM 열기 결과와 메타데이터를 조회했으며, 테스트 메시지는 전송하지 않았습니다.
-
-## 이전 Vercel 설정 (현재 사용하지 않음)
-
-1. 팀 레포를 Vercel 프로젝트에 연결합니다. Root Directory는 저장소 루트, Framework는 Other,
-   Node.js는 24.x, 운영 브랜치는 main입니다. `vercel.json`의 설치·빌드 명령을 사용합니다.
-2. Production 환경변수에 해당 팀의 `APP_ID`, `APP_SECRET`, `SIGNING_KEY`를 설정합니다.
-   비밀 키는 서버 환경에만 저장하고 Git, WAM, 이메일 본문에 넣지 않습니다.
-   Preview에는 운영 자격 증명을 복사하지 않습니다. Preview 앱 검증은 별도 앱이 필요합니다.
-3. 배포 후 고정 Production 도메인을 확인합니다. `/api/health`의 200 응답은 프로세스 확인일 뿐
-   앱 등록·권한·Function 성공을 증명하지 않습니다.
-4. 앱 개발자 설정에 Function Endpoint `https://HOST/functions`,
-   WAM Endpoint `https://HOST/resource/wam`을 저장합니다. `/v1`, `/tutorial`을 덧붙이지 않습니다.
-5. 해당 팀 자격 증명을 로컬 `server/.env`에 안전하게 설정한 뒤 `corepack pnpm register`를 실행합니다.
-   이 명령은 실제 앱의 Extension 등록을 변경합니다. 배포된 URL이 먼저 응답해야 합니다.
-   Vercel의 콜드 스타트에서는 자동 등록하지 않습니다.
-6. 해당 팀 개발 채널에 앱을 설치합니다. `writeGroupMessage`, `writeGroupMessageAsManager`는
-   튜토리얼 메시지 예제에 필요합니다. 팀의 기능에 맞춰 필요한 권한만 설정합니다.
-7. 채널의 테스트 그룹에서 `/tutorial`을 실행해 WAM을 열고 두 전송 경로를 검증합니다.
-   실제 메시지가 생성되므로 운영진이 지정한 테스트 그룹에서 실행합니다.
-8. Vercel Deployment Protection이 Function 호출 또는 WAM 로드를 막지 않는지 확인합니다.
-   Function의 서명 검증은 유지합니다. 다른 팀의 앱·프로젝트 접근 권한이 없는지도 확인합니다.
-
-## 팀장 인계
-
-GitHub 레포, Vercel 프로젝트, 앱 관리 화면, 개발 채널 URL과 초대 수락 여부를 전달합니다.
-각 팀장이 작은 화면 변경을 push하고 실제 채널에서 확인해야 인계 완료입니다.
-Function 스키마·Extension 메타데이터 변경 후에는 배포 완료 후 운영진과 등록 갱신을 진행합니다.
-일반 로직/UI 변경은 재배포 후 확인합니다. 비밀 키를 문의 채널에 붙여 넣지 마세요.
-
-## 검증과 장애 대응
+- `main` push가 배포 대상입니다. 개인 브랜치는 자동 배포하지 않습니다.
+- 운영진의 비공개 컨트롤러가 새 커밋을 5분 주기로 확인합니다. GitHub 스케줄 지연과 빌드 시간으로
+  더 늦어질 수 있으며 여러 push가 겹치면 최신 커밋 기준으로 배포됩니다.
+- 팀 레포의 CI 성공과 실제 배포 성공은 별개입니다. 배포 SHA·오류 로그는 운영진에게 확인하세요.
+- 일반 로직/UI 변경은 재배포하면 반영됩니다. Function 스키마·익스텐션·커맨드 메타데이터를
+  바꿨다면 배포 후 운영진에게 등록 갱신도 요청합니다.
+- 현재 CI 성공을 기다렸다가 배포하는 구조는 아닙니다. main에 합치기 전에 아래 검증을 완료하세요.
 
 ```sh
 corepack pnpm typecheck
 corepack pnpm test
 corepack pnpm lint
-corepack pnpm build:vercel
-corepack pnpm test:vercel
+corepack pnpm build:cloudflare
 ```
 
-서버리스 산출물은 `.vercel/output`입니다. 로컬 smoke는 합성 자격 증명을 사용하며 외부 API 호출을
-차단합니다. 실제 Vercel 라우팅·앱 설치·호스트 WAM 실행은 별도로 검증해야 합니다.
-서버리스에서는 메모리와 로컬 파일을 영속 저장소로 사용하지 않습니다.
-실패하면 Vercel 로그, 마지막 정상 배포, 앱 Endpoint·권한·서명 키를 순서대로 확인합니다.
-지원 종료일과 비용 한도는 운영진 안내를 따릅니다.
+로컬 런타임 검증은 가짜 `.dev.vars` 값과 마이그레이션을 준비한 뒤 다음과 같이 실행합니다.
+
+```sh
+# 터미널 1
+corepack pnpm exec wrangler dev --local --port 8797
+# 터미널 2
+corepack pnpm test:cloudflare
+```
+
+등록 갱신은 운영진이 해당 팀 자격 증명을 안전하게 설정한 환경에서 `corepack pnpm register`로
+실행합니다. Workers에서는 자동 등록하지 않습니다. 앱 비밀 키는 WAM 코드, Git, 이슈, 채팅,
+README에 넣지 마세요. `.dev.vars`와 `server/.env`도 커밋하지 않습니다.
+
+## Desk에서 앱 확인하기
+
+전용 채널의 그룹 채팅에서 `/tutorial`을 입력하고 커맨드를 선택한 뒤 실행합니다.
+튜토리얼 WAM에는 `Send as a manager`, `Send as a bot` 버튼이 있으며 각각 실제 메시지를
+보냅니다. 운영진이 지정한 테스트 그룹에서만 사용하세요. DM·고객 상담방은 이 예제의 지원 대상이 아닙니다.
+
+화면이 열리지 않으면 설치된 채널·활성 커맨드·배포 상태·Function/WAM Endpoint를 확인합니다.
+전송이 실패하면 `writeGroupMessage`, `writeGroupMessageAsManager` 권한과 서명·앱 비밀 키 설정을
+운영진에게 확인 요청합니다. 오래 열린 창에서 봇 전송이 실패하면 닫고 커맨드를 다시 실행하세요.
+봇 대상 토큰은 5분 동안 유효합니다.
+
+## 무료 환경과 장애 대응
+
+팀별 Worker 1개·D1 1개를 사용합니다. Cloudflare 계정 토큰은 팀 레포에 없으며,
+운영진이 Worker·계정·DB 매핑을 관리합니다. 이 매핑을 바꿔 다른 팀 DB를 연결할 수 없습니다.
+메모리·로컬 파일은 영속 저장소가 아니므로 데이터를 D1에 저장하세요.
+
+Workers Free, D1, GitHub Actions에는 요청·CPU·저장량·빌드 사용량 한도가 있습니다.
+유료 업그레이드는 하지 않으므로 한도에 도달하면 운영진에게 알려주세요.
+WebSocket, Nest microservices, class-validator, class-transformer는 현재 Workers 번들에서
+제외되어 있습니다. 입력 검증에는 기존 Zod를 사용합니다.
+
+장애 보고에는 팀명, 커밋 SHA, 발생 시각, `/api/health`·`/api/ready` 결과, 재현 순서와
+비밀 키를 가린 오류 화면을 포함하세요. 이전 커밋의 revert를 main에 push하면 코드 복구도
+같은 배포 흐름을 따릅니다. 긴급 복구는 운영진에게 요청하세요.
+
+## 인계 체크리스트
+
+- GitHub Write·앱 개발 권한·전용 채널 초대를 모두 수락합니다.
+- 로컬 Worker·D1 실행과 SQL 적용을 확인합니다.
+- 작은 화면 변경을 main에 반영하고 실제 Desk에서 배포 결과를 확인합니다.
+- DB 변경 요청, 익스텐션 등록 갱신, 비밀 키 변경은 운영진과 진행합니다.
+- 현재 검증 결과와 남은 항목은 [Desk 검증 기록](docs/desk-qa.md)을 참고하세요.
