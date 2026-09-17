@@ -22,9 +22,9 @@ corepack pnpm dev:wam
 ## 현재 배포 대상: Cloudflare Workers Free + D1
 
 유료 플랜이나 자동 과금 Trial을 사용하지 않습니다. 계정당 D1 개수와 무료 사용량 한도가 있으므로
-11개 팀 전체 배치는 계정 운영 조건 확인 후 확정합니다. 현재 원격 계정·DB는 아직 연결하지 않았습니다.
+11개 팀 전체 배치는 계정 운영 조건 확인 후 확정합니다. team1은 원격 Worker·D1 연결과 앱 설치를 완료했습니다.
 
-- 팀별 Worker 1개와 D1 1개를 사용합니다. `wrangler.jsonc`의 DB ID는 로컬용 자리표시자입니다.
+- 팀별 Worker 1개와 D1 1개를 사용합니다. 템플릿의 `wrangler.jsonc` DB ID는 자리표시자이며, team1에는 실제 DB가 연결되어 있습니다.
 - Cloudflare 서버 진입점은 `cloudflare/worker.mjs`, SQL 마이그레이션은 `cloudflare/migrations`입니다.
 - NestJS HTTP와 SDK Function은 유지합니다. 선택 기능인 WebSocket, microservices, class-validator,
   class-transformer는 이 Workers 빌드에서 제외합니다. 입력 검증은 기존 Zod를 사용합니다.
@@ -56,7 +56,8 @@ Function/WAM Endpoint를 설정하고 등록·설치 검증을 해야 합니다.
 운영진 전용 배포 저장소가 각 팀 `main`의 새 커밋을 확인합니다. 팀별로 push하면 자기 Worker만
 배포됩니다. 초기 구현은 5분 주기이며 GitHub 스케줄 지연으로 더 늦어질 수 있습니다.
 같은 코드를 다시 배포하려면 빈 커밋을 push하거나 운영진에게 재배포를 요청합니다.
-이 컨트롤러는 아직 원격 활성화 전입니다.
+team1은 컨트롤러가 활성화되어 있습니다. 나머지 팀은 운영진의 계정·DB·앱 설정 후 활성화합니다.
+배포 상태와 오류 로그는 운영진에게 확인합니다. GitHub Actions 무료 사용량 한도도 적용됩니다.
 
 Cloudflare 계정 토큰은 팀 레포에 저장하지 않습니다. 비밀정보 없는 빌드와 토큰을 사용하는 업로드를
 별도 실행 환경으로 분리하고, Worker 이름·계정·DB 연결은 운영진의 고정 매핑만 사용합니다.
@@ -66,9 +67,16 @@ DB 마이그레이션은 코드 재배포와 별도이며 초기에는 운영진
 
 ### 파일럿 검증 상태
 
-Workers 로컬 실행, HMAC 검증/거부, 동시 호출, WAM 정적 파일, D1 로컬 마이그레이션 및
-저장·조회·삭제는 검증했습니다. 원격 무료 CPU 한도, 실제 채널톡 설치·호스트 실행과
-운영진 배포 파이프라인 E2E는 아직 검증하지 않았습니다.
+2026-09-17 기준 team1의 원격 health·D1 readiness, HMAC 서명 검증/거부, WAM 정적 파일,
+D1 저장·조회·삭제, 채널톡 앱 설치와 채널톡을 통한 함수 호출, 운영진 GitHub Actions의 실제
+빌드·배포를 확인했습니다. 로컬 동시 호출과 두 레포 CI도 통과했습니다.
+
+- 서버: https://skku-team1.skku-hackathon-2026.workers.dev
+- 전용 채널: SKKU 2026 Team1 (253286)
+- 앱: SKKU 2026 Team1 / 커맨드 `/tutorial`
+
+무료 CPU 한도에서의 부하 시험과 Desk 내부 WAM의 메시지 전송 동작은 아직 검증하지 않았습니다.
+설치된 앱에서 WAM 열기 결과와 메타데이터를 조회했으며, 테스트 메시지는 전송하지 않았습니다.
 
 ## 이전 Vercel 설정 (현재 사용하지 않음)
 
