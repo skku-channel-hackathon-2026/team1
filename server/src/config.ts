@@ -21,7 +21,7 @@ export const channelAppOptions: ChannelAppModuleOptions = {
   appId,
   appSecret,
   signingKey,
-  appStoreUrl: process.env.APP_STORE_URL ?? "https://app-store.channel.io",
+  appStoreUrl: process.env.APP_STORE_URL ?? "https://app-store-api.channel.io",
   autoRegister: process.env.VERCEL !== "1" && process.env.CLOUDFLARE_WORKER !== "1" && process.env.AUTO_REGISTER !== "false",
   skipSignatureVerification,
 };
