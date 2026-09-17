@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { TokenManager } from "@channel.io/app-sdk-server";
 import { channelAppOptions } from "./config.js";
 import { createApplication } from "./application.js";
 
@@ -30,5 +31,6 @@ try {
     );
 } finally {
   clearTimeout(timeout);
+  app.get(TokenManager).destroy();
   await app.close();
 }
