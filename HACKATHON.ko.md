@@ -19,7 +19,58 @@ corepack pnpm dev:wam
 서버 로컬 실행은 기본적으로 앱을 자동 등록합니다. 배포 URL이 등록된 앱을 로컬에서 실험할 때는
 `AUTO_REGISTER=false`로 실행하고, 별도 개발 앱을 사용하세요.
 
-## 운영진: Vercel 최초 설정
+## 현재 배포 대상: Cloudflare Workers Free + D1
+
+유료 플랜이나 자동 과금 Trial을 사용하지 않습니다. 계정당 D1 개수와 무료 사용량 한도가 있으므로
+11개 팀 전체 배치는 계정 운영 조건 확인 후 확정합니다. 현재 원격 계정·DB는 아직 연결하지 않았습니다.
+
+- 팀별 Worker 1개와 D1 1개를 사용합니다. `wrangler.jsonc`의 DB ID는 로컬용 자리표시자입니다.
+- Cloudflare 서버 진입점은 `cloudflare/worker.mjs`, SQL 마이그레이션은 `cloudflare/migrations`입니다.
+- NestJS HTTP와 SDK Function은 유지합니다. 선택 기능인 WebSocket, microservices, class-validator,
+  class-transformer는 이 Workers 빌드에서 제외합니다. 입력 검증은 기존 Zod를 사용합니다.
+- `server/src/database.ts`의 `getDatabase()`는 현재 요청에 연결된 해당 팀 D1만 반환합니다.
+- DB 예제 테이블 `app_records`에는 id, JSON 값, 생성/수정 시각이 있습니다. UPDATE 시 updated_at은
+  쿼리에서 갱신하세요. 팀 기능에 맞는 테이블을 마이그레이션으로 추가합니다.
+
+```sh
+corepack pnpm build:cloudflare
+# .dev.vars에 로컬 테스트용 APP_ID, APP_SECRET, SIGNING_KEY를 입력합니다.
+corepack pnpm db:migrate:local
+corepack pnpm dev:cloudflare
+```
+
+```ts
+import { getDatabase } from "./database.js";
+const record = await getDatabase()
+  .prepare("SELECT value_json FROM app_records WHERE id = ?")
+  .bind(recordId)
+  .first<{ value_json: string }>();
+```
+
+기존 `dev:server`는 D1을 제공하지 않습니다. DB를 쓰는 기능은 Wrangler 로컬 런타임에서 개발하세요.
+실제 앱과 연결하려면 운영진이 원격 D1 생성·마이그레이션, 앱 자격 증명, 고정 Worker 주소 및
+Function/WAM Endpoint를 설정하고 등록·설치 검증을 해야 합니다.
+
+### 팀별 자율 배포
+
+운영진 전용 배포 저장소가 각 팀 `main`의 새 커밋을 확인합니다. 팀별로 push하면 자기 Worker만
+배포됩니다. 초기 구현은 5분 주기이며 GitHub 스케줄 지연으로 더 늦어질 수 있습니다.
+같은 코드를 다시 배포하려면 빈 커밋을 push하거나 운영진에게 재배포를 요청합니다.
+이 컨트롤러는 아직 원격 활성화 전입니다.
+
+Cloudflare 계정 토큰은 팀 레포에 저장하지 않습니다. 비밀정보 없는 빌드와 토큰을 사용하는 업로드를
+별도 실행 환경으로 분리하고, Worker 이름·계정·DB 연결은 운영진의 고정 매핑만 사용합니다.
+팀 코드가 운영진 설정을 변경해 다른 팀 DB를 연결할 수 없게 합니다.
+DB 마이그레이션은 코드 재배포와 별도이며 초기에는 운영진이 대상 DB와 SQL을 확인해 적용합니다.
+단순 재배포로 D1 데이터는 초기화되지 않습니다.
+
+### 파일럿 검증 상태
+
+Workers 로컬 실행, HMAC 검증/거부, 동시 호출, WAM 정적 파일, D1 로컬 마이그레이션 및
+저장·조회·삭제는 검증했습니다. 원격 무료 CPU 한도, 실제 채널톡 설치·호스트 실행과
+운영진 배포 파이프라인 E2E는 아직 검증하지 않았습니다.
+
+## 이전 Vercel 설정 (현재 사용하지 않음)
 
 1. 팀 레포를 Vercel 프로젝트에 연결합니다. Root Directory는 저장소 루트, Framework는 Other,
    Node.js는 24.x, 운영 브랜치는 main입니다. `vercel.json`의 설치·빌드 명령을 사용합니다.

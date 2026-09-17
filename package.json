@@ -18,9 +18,14 @@
     "start": "pnpm --filter @tutorial/server start",
     "build:vercel": "pnpm build && node scripts/build-vercel.mjs",
     "register": "pnpm --filter @tutorial/server register",
-    "test:vercel": "node scripts/smoke-vercel.mjs"
+    "test:vercel": "node scripts/smoke-vercel.mjs",
+    "build:cloudflare": "pnpm build && node scripts/build-cloudflare.mjs",
+    "dev:cloudflare": "wrangler dev --local",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "test:cloudflare": "node scripts/smoke-cloudflare.mjs"
   },
   "devDependencies": {
-    "prettier": "^3.2.5"
+    "prettier": "^3.2.5",
+    "wrangler": "^4.132.0"
   }
 }

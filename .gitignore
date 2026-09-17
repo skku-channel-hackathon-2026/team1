@@ -8,3 +8,8 @@
 .vercel/
 .env.*
 !.env.example
+
+.wrangler/
+.dev.vars*
+cloudflare/static/
+cloudflare/bundle/
