@@ -2,6 +2,8 @@
 
 [English](README.md) | [한국어](README.ko.md) | [日本語](README.ja.md)
 
+SKKU hackathon teams: see the [Cloudflare deployment and database guide](HACKATHON.ko.md).
+
 A minimal Channel App Store app built with the official
 [Channel App SDK](https://github.com/channel-io/app-sdk). It demonstrates the current SDK path
 instead of implementing token exchange, extension registration, signature verification, and WAM

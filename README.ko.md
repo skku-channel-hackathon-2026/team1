@@ -145,4 +145,4 @@ wam/
 
 ## 성균관대 해커톤
 
-팀별 Vercel 배포와 개발 안내는 [해커톤 가이드](HACKATHON.ko.md)를 참고하세요.
+팀별 Cloudflare Workers·D1 배포와 개발 안내는 [해커톤 가이드](HACKATHON.ko.md)를 참고하세요.
