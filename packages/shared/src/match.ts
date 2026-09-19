@@ -25,12 +25,13 @@ import {
 } from "./timetable.js";
 
 export const WEIGHTS = {
-  sameRoom: 1.0, // w1 (× idf)
+  sameRoom: 1.0, // w1 — flat per shared period (rarity weighting removed by team decision)
   sameFloor: 0.45, // w2a
   sameBuilding: 0.25, // w2b
   sharedFree: 0.15, // w3
-  chain: 3.0,
-  lunch: 2.0,
+  // Free-period bonuses are kept small on purpose: sharing a class must outweigh sharing a gap.
+  chain: 1.0,
+  lunch: 0.5,
 } as const;
 
 export type Weights = { [K in keyof typeof WEIGHTS]: number };
@@ -105,24 +106,6 @@ export interface MatchResult {
   reasons: string[];
 }
 
-/** Instance rarity within the pool. Smoothed so a class everyone takes still counts a little. */
-export function computeIdf(pool: Profile[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const profile of pool) {
-    const seen = new Set<string>();
-    for (const instance of profile.instances) {
-      const id = instanceId(instance);
-      if (seen.has(id)) continue;
-      seen.add(id);
-      counts.set(id, (counts.get(id) ?? 0) + 1);
-    }
-  }
-  const total = Math.max(pool.length, 1);
-  const idf = new Map<string, number>();
-  for (const [id, count] of counts) idf.set(id, Math.log(1 + total / count));
-  return idf;
-}
-
 function isClass(
   state: SlotGrid[Day][number],
 ): state is { kind: "CLASS"; instance: CourseInstance } {
@@ -143,12 +126,7 @@ interface RawPair {
   overlapCells: OverlapCell[];
 }
 
-function scoreRaw(
-  me: Profile,
-  other: Profile,
-  idf: Map<string, number>,
-  weights: Weights,
-): RawPair {
+function scoreRaw(me: Profile, other: Profile, weights: Weights): RawPair {
   const mine = buildSlotGrid(me.instances);
   const theirs = buildSlotGrid(other.instances);
 
@@ -176,7 +154,7 @@ function scoreRaw(
       if (isClass(sa) && isClass(sb)) {
         const idA = instanceId(sa.instance);
         if (idA === instanceId(sb.instance)) {
-          breakdown.sameRoom += weights.sameRoom * (idf.get(idA) ?? 1);
+          breakdown.sameRoom += weights.sameRoom;
           sameRoomById.set(idA, sa.instance);
           overlapCells.push({
             day,
@@ -255,22 +233,17 @@ function scoreRaw(
  * Dividing by it turns raw weights into a 0–100 score that reads as "how much of my week
  * this person shares".
  */
-export function selfScore(
-  me: Profile,
-  idf: Map<string, number>,
-  weights: Weights = WEIGHTS,
-): number {
-  return scoreRaw(me, me, idf, weights).score;
+export function selfScore(me: Profile, weights: Weights = WEIGHTS): number {
+  return scoreRaw(me, me, weights).score;
 }
 
 export function scorePair(
   me: Profile,
   other: Profile,
-  idf: Map<string, number>,
   weights: Weights = WEIGHTS,
-  ceiling: number = selfScore(me, idf, weights),
+  ceiling: number = selfScore(me, weights),
 ): MatchResult {
-  const raw = scoreRaw(me, other, idf, weights);
+  const raw = scoreRaw(me, other, weights);
   const scale = ceiling > 0 ? 100 / ceiling : 0;
   const parts: ScoreParts = {
     sameRoom: round1(raw.breakdown.sameRoom * scale),
@@ -331,14 +304,10 @@ export function rankMatches(
 ): MatchResult[] {
   const weights = options.weights ?? WEIGHTS;
   const sameCampus = pool.filter((profile) => profile.campus === me.campus);
-  const idfPool = sameCampus.some((profile) => profile.memberId === me.memberId)
-    ? sameCampus
-    : [...sameCampus, me];
-  const idf = computeIdf(idfPool);
-  const ceiling = selfScore(me, idf, weights);
+  const ceiling = selfScore(me, weights);
   return sameCampus
     .filter((profile) => profile.memberId !== me.memberId)
-    .map((profile) => scorePair(me, profile, idf, weights, ceiling))
+    .map((profile) => scorePair(me, profile, weights, ceiling))
     .sort(
       (x, y) =>
         y.raw.score - x.raw.score || x.nickname.localeCompare(y.nickname),

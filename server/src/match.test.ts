@@ -9,7 +9,6 @@ import {
   buildDailySummary,
   buildSlotGrid,
   buildingKey,
-  computeIdf,
   instancesOf,
   rankMatches,
   scorePair,
@@ -141,8 +140,10 @@ test("scores are 0–100 and the four displayed parts add up", () => {
     );
   }
   const [top] = results;
-  assert.equal(top.raw.breakdown.chain, 9); // 3 chains × 3.0, folded into parts.free
+  assert.equal(top.raw.breakdown.chain, 3); // 3 chains × 1.0, folded into parts.free
   assert.ok(top.parts.free > 0);
+  // Sharing classes must matter more than sharing gaps for the people who share classes.
+  assert.ok(top.parts.sameRoom > top.parts.free);
   assert.ok(top.score < 100, "nobody in the seed shares my whole week");
 });
 
@@ -163,7 +164,6 @@ test("results are sorted by score and the runner-up has a wide margin", () => {
 });
 
 test("same building on the same floor scores higher than a different floor", () => {
-  const idf = computeIdf([me]);
   const sameFloor: Profile = {
     ...me,
     memberId: "floor",
@@ -174,8 +174,8 @@ test("same building on the same floor scores higher than a different floor", () 
     memberId: "other",
     instances: instancesOf(["MAJOR3_B"]), // 32302, MON/WED 4 — 데모 MAJOR2_A는 32205
   };
-  const a = scorePair(me, sameFloor, idf);
-  const b = scorePair(me, otherFloor, idf);
+  const a = scorePair(me, sameFloor);
+  const b = scorePair(me, otherFloor);
   assert.equal(a.proximity, "BUILDING");
   assert.ok(a.sameBuilding.every((overlap) => overlap.sameFloor));
   assert.ok(b.sameBuilding.every((overlap) => !overlap.sameFloor));
@@ -240,7 +240,7 @@ test("a chain still scores internally, but the sentence just says 공강", () =>
     ["공유", 2, 2, "31101"],
     ["끝", 5, 5, "50101"],
   ]);
-  const gap = scorePair(a, b, computeIdf([a, b]));
+  const gap = scorePair(a, b);
   assert.equal(gap.chains.length, 0);
   assert.equal(gap.raw.breakdown.chain, 0);
   assert.equal(
@@ -257,11 +257,11 @@ test("a chain still scores internally, but the sentence just says 공강", () =>
     ["긴수업", 2, 3, "31101"],
     ["끝", 5, 5, "33101"],
   ]);
-  const adjacent = scorePair(c, d, computeIdf([c, d]));
+  const adjacent = scorePair(c, d);
   assert.deepEqual(adjacent.chains, [
     { day: "MON", period: 3, freePeriod: 4, subject: "긴수업" },
   ]);
-  assert.equal(adjacent.raw.breakdown.chain, 3);
+  assert.equal(adjacent.raw.breakdown.chain, 1);
   assert.equal(
     adjacent.dailySummary.MON,
     "2~3교시 같이 듣기 → 공강 1시간 → 5교시 같이 듣기",
@@ -280,4 +280,19 @@ test("daily summary merges consecutive periods", () => {
   assert.equal(summary.MON, "2교시 같이 듣기 → 공강 2시간");
   assert.equal(summary.TUE, "5~6교시 같은 건물(다산경제관)");
   assert.equal(summary.WED, undefined);
+});
+
+test("a shared period is worth the same no matter how many people take that class", () => {
+  // Same instance shared with 3 people vs with 20 → identical per-period value.
+  const shared = mondayProfile("x", [["공통", 2, 2, "31101"]]);
+  const other = mondayProfile("y", [["공통", 2, 2, "31101"]]);
+  const alone = scorePair(shared, other);
+  const crowd = rankMatches(shared, [
+    other,
+    ...Array.from({ length: 20 }, (_, i) =>
+      mondayProfile(`z${i}`, [["공통", 2, 2, "31101"]]),
+    ),
+  ]);
+  assert.equal(alone.raw.breakdown.sameRoom, 1);
+  assert.ok(crowd.every((r) => r.raw.breakdown.sameRoom === 1));
 });

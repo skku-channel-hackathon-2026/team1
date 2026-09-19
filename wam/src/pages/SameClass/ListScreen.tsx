@@ -52,7 +52,7 @@ export function ListScreen({
     return [...list].sort(compare[sort])
   }, [results, includeOthers, me.department, sort])
 
-  // Top three by recommendation get a highlight; only meaningful in 추천순.
+  // Top three by score get a highlight; only meaningful in 점수순.
   const rankOf = (targetId: string): 1 | 2 | 3 | undefined => {
     if (sort !== 'score') return undefined
     const index = filtered.findIndex((c) => c.targetId === targetId)
@@ -116,7 +116,7 @@ export function ListScreen({
             value={sort}
             onChange={setSort}
             options={[
-              { value: 'score', label: '추천순' },
+              { value: 'score', label: '점수순' },
               { value: 'sameRoom', label: '같은 수업 많은 순' },
               { value: 'free', label: '공강 겹침 많은 순' },
             ]}
