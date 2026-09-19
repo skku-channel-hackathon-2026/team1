@@ -331,7 +331,7 @@ export function Legend() {
       </span>
       <span>
         <span className="sc-legend__swatch et-block--building" />
-        같은 건물
+        같은 건물 · 다른 강의실
       </span>
       <span>
         <span className="sc-legend__swatch et-free" />

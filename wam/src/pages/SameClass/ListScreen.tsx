@@ -1,12 +1,8 @@
 import { useMemo, useState } from 'react'
-import {
-  PROXIMITY_LABELS,
-  type MatchCandidate,
-  type Profile,
-} from '@tutorial/shared'
+import { type MatchCandidate, type Profile } from '@tutorial/shared'
 
 import { Legend, TimetableGrid } from './TimetableGrid'
-import { MATCH_STATE_LABELS, PROXIMITY_TONE } from './labels'
+import { MATCH_STATE_LABELS } from './labels'
 import { Badge, Button, Segmented, Switch } from './ui'
 
 export interface ListScreenProps {
@@ -56,7 +52,12 @@ export function ListScreen({
     return [...list].sort(compare[sort])
   }, [results, includeOthers, me.department, sort])
 
-  const topId = filtered[0]?.targetId
+  // Top three by recommendation get a highlight; only meaningful in 추천순.
+  const rankOf = (targetId: string): 1 | 2 | 3 | undefined => {
+    if (sort !== 'score') return undefined
+    const index = filtered.findIndex((c) => c.targetId === targetId)
+    return index >= 0 && index < 3 ? ((index + 1) as 1 | 2 | 3) : undefined
+  }
 
   return (
     <div className="sc-stack">
@@ -162,8 +163,7 @@ export function ListScreen({
             key={candidate.targetId}
             me={me}
             candidate={candidate}
-            top={candidate.targetId === topId && sort === 'score'}
-            showDepartment={includeOthers}
+            rank={rankOf(candidate.targetId)}
             onClick={() => onSelect(candidate)}
           />
         ))}
@@ -175,20 +175,18 @@ export function ListScreen({
 function CandidateCard({
   me,
   candidate,
-  top,
-  showDepartment,
+  rank,
   onClick,
 }: {
   me: Profile
   candidate: MatchCandidate
-  top: boolean
-  showDepartment: boolean
+  rank?: 1 | 2 | 3
   onClick: () => void
 }) {
   const stateLabel = MATCH_STATE_LABELS[candidate.matchState]
   return (
     <div
-      className={`sc-card${top ? ' sc-card--top' : ''}`}
+      className={`sc-card${rank ? ` sc-card--rank${rank}` : ''}`}
       role="button"
       tabIndex={0}
       onClick={onClick}
@@ -206,13 +204,10 @@ function CandidateCard({
         <div className="sc-grow sc-stack sc-stack--tight">
           <div className="sc-row">
             <span className="sc-title-sm">{candidate.nickname}</span>
-            {showDepartment && candidate.department !== me.department && (
-              <span className="sc-caption">{candidate.department}</span>
+            <Badge tone="soft">{candidate.department}</Badge>
+            {rank && (
+              <Badge tone={rank === 1 ? 'primary' : 'tint'}>{rank}순위</Badge>
             )}
-            {top && <Badge tone="primary">1순위</Badge>}
-            <Badge tone={PROXIMITY_TONE[candidate.proximity]}>
-              {PROXIMITY_LABELS[candidate.proximity]}
-            </Badge>
             {stateLabel && (
               <Badge
                 tone={candidate.matchState === 'ACCEPTED' ? 'success' : 'soft'}

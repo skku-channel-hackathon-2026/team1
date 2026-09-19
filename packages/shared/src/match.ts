@@ -369,9 +369,8 @@ function buildReasons(input: {
     const [building, count] = [...counts.entries()].sort(
       (x, y) => y[1] - x[1],
     )[0];
-    reasons.push(`${building}에 같이 있는 교시 ${count}개`);
-  } else {
-    reasons.push("같은 건물에 있는 교시 없음");
+    // Same building but a different room — a shared class already counts as 같은 강의실 above.
+    reasons.push(`같은 건물 다른 강의실 ${count}교시 (${building})`);
   }
   reasons.push(
     input.sharedFreeSlots.length > 0
@@ -385,7 +384,7 @@ function periodRange(from: number, to: number): string {
   return from === to ? `${from}교시` : `${from}~${to}교시`;
 }
 
-/** "수: 2교시 같이 듣고 → 공강 1시간 → 4교시 같이 듣고 → 공강 1시간" */
+/** "수: 2교시 같이 듣기 → 공강 1시간 → 4교시 같이 듣기 → 공강 1시간" */
 export function buildDailySummary(
   cells: OverlapCell[],
 ): Partial<Record<Day, string>> {
@@ -413,7 +412,7 @@ export function buildDailySummary(
       }
       const run = todays.slice(index, next);
       if (start.kind === "SAME") {
-        segments.push(`${periodRange(start.period, end.period)} 같이 듣고`);
+        segments.push(`${periodRange(start.period, end.period)} 같이 듣기`);
       } else if (start.kind === "BUILDING") {
         segments.push(
           `${periodRange(start.period, end.period)} 같은 건물(${start.label})`,

@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react'
 import {
   CAMPUS_LABELS,
-  DEMO_PRESET,
+  DEMO_PRESETS,
   instanceId,
+  matchesDemoPreset,
   type Campus,
   type CourseInstance,
   type Day,
@@ -53,13 +54,36 @@ export function InputScreen({
   )
 
   const loadPreset = useCallback(() => {
+    const preset = DEMO_PRESETS[draft.campus]
     onChange({
       ...draft,
-      department: DEMO_PRESET.department,
-      campus: DEMO_PRESET.campus,
-      instances: DEMO_PRESET.instances,
+      department: preset.department,
+      instances: preset.instances,
     })
   }, [draft, onChange])
+
+  // Switching campus while the demo timetable is loaded swaps in that campus's demo:
+  // different courses, professors and buildings — not just a re-labelled room number.
+  const changeCampus = useCallback(
+    (campus: Campus) => {
+      if (campus === draft.campus) return
+      if (matchesDemoPreset(draft.instances, draft.campus)) {
+        const preset = DEMO_PRESETS[campus]
+        onChange({
+          ...draft,
+          campus,
+          department:
+            draft.department === DEMO_PRESETS[draft.campus].department
+              ? preset.department
+              : draft.department,
+          instances: preset.instances,
+        })
+        return
+      }
+      onChange({ ...draft, campus })
+    },
+    [draft, onChange]
+  )
 
   const openAdd = useCallback((day?: Day, period?: number) => {
     setEditor({
@@ -205,7 +229,7 @@ export function InputScreen({
             value: campus,
             label: CAMPUS_LABELS[campus],
           }))}
-          onChange={(campus) => update({ campus })}
+          onChange={changeCampus}
         />
       </section>
 

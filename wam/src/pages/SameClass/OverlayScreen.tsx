@@ -1,14 +1,13 @@
 import {
   DAYS,
   DAY_LABELS,
-  PROXIMITY_LABELS,
   type Day,
   type MatchCandidate,
   type Profile,
 } from '@tutorial/shared'
 
 import { Legend, TimetableGrid } from './TimetableGrid'
-import { MATCH_STATE_LABELS, PROXIMITY_TONE } from './labels'
+import { MATCH_STATE_LABELS } from './labels'
 import { Badge, Button } from './ui'
 
 export interface OverlayScreenProps {
@@ -24,7 +23,7 @@ export interface OverlayScreenProps {
 
 const PART_LABELS: { key: keyof MatchCandidate['parts']; label: string }[] = [
   { key: 'sameRoom', label: '같은 강의실' },
-  { key: 'sameBuilding', label: '같은 건물' },
+  { key: 'sameBuilding', label: '같은 건물 · 다른 강의실' },
   { key: 'free', label: '공강' },
 ]
 
@@ -74,9 +73,6 @@ export function OverlayScreen({
               </div>
               <h1 className="sc-title">{candidate.nickname}</h1>
               <Badge tone="soft">{candidate.department}</Badge>
-              <Badge tone={PROXIMITY_TONE[candidate.proximity]}>
-                {PROXIMITY_LABELS[candidate.proximity]}
-              </Badge>
               {stateLabel && (
                 <Badge
                   tone={
