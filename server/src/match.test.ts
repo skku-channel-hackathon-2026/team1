@@ -74,8 +74,9 @@ test("seed distribution is a staircase from a near twin down to nobody shared", 
     histogram[result.sameCourseCount] =
       (histogram[result.sameCourseCount] ?? 0) + 1;
   }
-  assert.deepEqual(histogram, { 0: 6, 1: 6, 2: 5, 3: 3, 4: 2, 5: 1 });
-  assert.equal(sameDepartment.length, 23);
+  assert.deepEqual(histogram, { 0: 1, 1: 2, 2: 2, 3: 2, 4: 1, 5: 1 });
+  assert.equal(sameDepartment.length, 9);
+  assert.equal(SEED_PROFILES.length, 12);
   // Scores spread across the whole range instead of clustering near zero.
   const scores = rankMatches(me, SEED_PROFILES).map((r) => r.score);
   assert.ok(scores[0] >= 85, `top ${scores[0]}`);
@@ -83,7 +84,7 @@ test("seed distribution is a staircase from a near twin down to nobody shared", 
     scores.some((s) => s >= 40 && s <= 60),
     "mid-range candidates exist",
   );
-  assert.ok(scores.at(-1)! <= 5, "bottom is near zero");
+  assert.ok(scores.at(-1)! <= 10, "bottom is near zero");
 });
 
 test("우주 ranks first and the Wednesday summary reads class → gap → class", () => {

@@ -305,10 +305,10 @@ interface SeedSpec {
   sections: SectionKey[];
 }
 
-// Same-department spread against the demo timetable (sections shared, 6 in the demo):
-//   5 shared ×1 · 4 shared ×2 · 3 shared ×3 · 2 shared ×5 · 1 shared ×6 · 0 shared ×6.
-// The 0-shared people still cross the demo in the same building or share free periods, so the
-// bottom of the list is not empty. Other departments overlap only through 교양.
+// Same-department spread against the demo timetable (6 sections in the demo):
+//   5 shared ×1 · 4 ×1 · 3 ×2 · 2 ×2 · 1 ×2 · 0 ×1. Small enough to scroll in one screen,
+//   wide enough that scores run from a near twin down to almost nothing. Other departments
+//   overlap only through 교양.
 const SEED_SPECS: SeedSpec[] = [
   // 5 shared — near twin (index 0 → 우주, top of the list; keeps the Wednesday pattern)
   {
@@ -320,10 +320,6 @@ const SEED_SPECS: SeedSpec[] = [
     dept: 0,
     sections: ["MAJOR1_A", "MAJOR2_A", "MAJOR3_A", "ENG_C", "WRI_A", "GE_2"],
   },
-  {
-    dept: 0,
-    sections: ["MAJOR1_A", "MAJOR2_A", "MAJOR3_C", "ENG_A", "WRI_C", "GE_1"],
-  },
   // 3 shared
   {
     dept: 0,
@@ -332,10 +328,6 @@ const SEED_SPECS: SeedSpec[] = [
   {
     dept: 0,
     sections: ["MAJOR1_C", "MAJOR2_A", "MAJOR3_A", "ENG_A", "WRI_B", "GE_4"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_A", "MAJOR2_A", "MAJOR3_C", "ENG_C", "WRI_A", "GE_5"],
   },
   // 2 shared
   {
@@ -346,18 +338,6 @@ const SEED_SPECS: SeedSpec[] = [
     dept: 0,
     sections: ["MAJOR1_A", "MAJOR2_B", "MAJOR3_C", "ENG_B", "WRI_A", "GE_3"],
   },
-  {
-    dept: 0,
-    sections: ["MAJOR1_C", "MAJOR2_D", "MAJOR3_B", "ENG_A", "WRI_A", "GE_2"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_A", "MAJOR2_B", "MAJOR3_A", "ENG_B", "WRI_C", "GE_2"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_B", "MAJOR2_A", "MAJOR3_C", "ENG_C", "WRI_B", "GE_1"],
-  },
   // 1 shared
   {
     dept: 0,
@@ -367,54 +347,15 @@ const SEED_SPECS: SeedSpec[] = [
     dept: 0,
     sections: ["MAJOR1_B", "MAJOR2_A", "MAJOR3_C", "ENG_D", "WRI_C", "GE_3"],
   },
-  {
-    dept: 0,
-    sections: ["MAJOR1_C", "MAJOR2_B", "MAJOR3_A", "ENG_B", "WRI_B", "GE_5"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_B", "MAJOR2_C", "MAJOR3_B", "ENG_A", "WRI_C", "GE_5"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_C", "MAJOR2_D", "MAJOR3_C", "ENG_B", "WRI_A", "GE_4"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_B", "MAJOR2_C", "MAJOR3_B", "ENG_C", "WRI_B", "GE_1"],
-  },
   // 0 shared — same building / shared free periods only
   {
     dept: 0,
     sections: ["MAJOR1_B", "MAJOR2_C", "MAJOR3_B", "ENG_C", "WRI_B", "GE_2"],
   },
-  {
-    dept: 0,
-    sections: ["MAJOR1_C", "MAJOR2_D", "MAJOR3_C", "ENG_B", "WRI_B", "GE_4"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_B", "MAJOR2_C", "MAJOR3_B", "ENG_D", "WRI_C", "GE_5"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_C", "MAJOR2_B", "MAJOR3_B", "ENG_C", "WRI_C", "GE_3"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_B", "MAJOR2_C", "MAJOR3_C", "ENG_B", "WRI_B", "GE_2"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_C", "MAJOR2_D", "MAJOR3_B", "ENG_D", "WRI_B", "GE_5"],
-  },
-  // 타 학과 — 교양으로만 겹친다 (2 / 1 / 2 / 0 / 1 / 0 shared)
+  // 타 학과 — 교양으로만 겹친다
   { dept: 1, sections: ["DEPT2_X", "DEPT2_Y", "ENG_A", "WRI_A", "GE_2"] },
-  { dept: 1, sections: ["DEPT2_X", "DEPT2_Y", "ENG_C", "WRI_B", "GE_1"] },
   { dept: 2, sections: ["DEPT3_X", "DEPT3_Y", "ENG_A", "WRI_C", "GE_1"] },
-  { dept: 2, sections: ["DEPT3_X", "DEPT3_Y", "ENG_D", "WRI_B", "GE_3"] },
-  { dept: 3, sections: ["DEPT4_X", "DEPT4_Y", "ENG_B", "WRI_A", "GE_4"] },
-  { dept: 3, sections: ["DEPT4_X", "DEPT4_Y", "ENG_C", "WRI_C", "GE_5"] },
+  { dept: 3, sections: ["DEPT4_X", "DEPT4_Y", "ENG_B", "WRI_C", "GE_5"] },
 ];
 
 const NICKNAMES: Record<Campus, string[]> = {
@@ -431,23 +372,6 @@ const NICKNAMES: Record<Campus, string[]> = {
     "노랑",
     "강물",
     "바람",
-    "모래",
-    "유자",
-    "솔잎",
-    "은빛",
-    "제비",
-    "조개",
-    "낙엽",
-    "단풍",
-    "서리",
-    "풀잎",
-    "물결",
-    "청포도",
-    "감귤",
-    "소나기",
-    "보름달",
-    "연꽃",
-    "자몽",
   ],
 };
 
@@ -468,7 +392,7 @@ function buildCohort(campus: Campus, idPrefix: string): Profile[] {
   }));
 }
 
-/** 29 freshmen on 자과캠. */
+/** 12 seeded freshmen on 자과캠. */
 export const SEED_PROFILES: Profile[] = buildCohort("SCIENCE", "s");
 
 export function seedProfilesOn(campus: Campus): Profile[] {

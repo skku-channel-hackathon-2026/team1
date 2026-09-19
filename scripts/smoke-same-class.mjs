@@ -65,8 +65,8 @@ const started = Date.now();
 const match = await call("tutorial.match", {}, "m1");
 const elapsed = Date.now() - started;
 assert.equal(match.me.nickname, "데모");
-assert.equal(match.poolSize, 30); // 29 seeds + me
-assert.equal(match.results.length, 29);
+assert.equal(match.poolSize, 13); // 12 seeds + me
+assert.equal(match.results.length, 12);
 assert.equal(match.results[0].nickname, "우주");
 assert.ok(match.results[0].score > 0 && match.results[0].score <= 100);
 assert.ok(match.results[0].raw.breakdown.sharedFree > 0);
@@ -189,5 +189,5 @@ assert.ok(!afterDelete.results.some((r) => r.targetId === "m1"));
 await call("tutorial.deleteProfile", {}, "m2");
 
 console.log(
-  `PASS: 같은 반 profile upsert, seeded ranking (우주 first of 29, match in ${elapsed}ms), request/accept state, overlap-only after accept, in-app inbox + 1:1 chat, cancel/decline/dissolve, delete`,
+  `PASS: 같은 반 profile upsert, seeded ranking (우주 first of 12, match in ${elapsed}ms), request/accept state, overlap-only after accept, in-app inbox + 1:1 chat, cancel/decline/dissolve, delete`,
 );
