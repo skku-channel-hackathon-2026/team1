@@ -148,13 +148,22 @@ export const MatchResultSchema = z.object({
   department: z.string(),
   campus: CampusSchema,
   score: z.number(),
-  breakdown: z.object({
+  parts: z.object({
     sameRoom: z.number(),
     sameBuilding: z.number(),
-    sharedFree: z.number(),
-    chain: z.number(),
+    free: z.number(),
     walk: z.number(),
-    lunch: z.number(),
+  }),
+  raw: z.object({
+    score: z.number(),
+    breakdown: z.object({
+      sameRoom: z.number(),
+      sameBuilding: z.number(),
+      sharedFree: z.number(),
+      chain: z.number(),
+      walk: z.number(),
+      lunch: z.number(),
+    }),
   }),
   proximity: z.enum(["ROOM", "BUILDING", "FREE"]),
   sameRoom: z.array(CourseInstanceSchema),
@@ -163,7 +172,7 @@ export const MatchResultSchema = z.object({
     SlotSchema.extend({ building: z.string(), sameFloor: z.boolean() }),
   ),
   sharedFreeSlots: z.array(SlotSchema),
-  lunchDays: z.array(DaySchema),
+  sharedFreeDays: z.array(DaySchema),
   chains: z.array(
     SlotSchema.extend({ freePeriod: z.number().int(), subject: z.string() }),
   ),
@@ -180,19 +189,17 @@ export const MatchResultSchema = z.object({
     SlotSchema.extend({
       kind: z.enum(["SAME", "BUILDING", "FREE"]),
       label: z.string(),
-      lunch: z.boolean(),
-      chain: z.boolean(),
     }),
   ),
   dailySummary: z.record(z.string()),
   reasons: z.array(z.string()),
 });
 
+// Even after mutual acceptance only the overlap is shown — the other person's solo classes
+// never leave the server (team decision: privacy over the "reveal" payoff).
 export const MatchCandidateSchema = MatchResultSchema.extend({
   matchState: MatchStateSchema,
   isSeed: z.boolean(),
-  // Only present after mutual acceptance.
-  revealedInstances: z.array(CourseInstanceSchema).optional(),
 });
 
 export type MatchCandidate = z.infer<typeof MatchCandidateSchema>;
@@ -209,6 +216,8 @@ export type MatchOutput = z.infer<typeof MatchOutputSchema>;
 
 export const RequestMatchInputSchema = z.object({
   targetId: z.string().min(1),
+  // Group chat the WAM was opened from; when present, the app bot posts a notice there.
+  groupId: z.string().optional(),
 });
 
 export type RequestMatchInput = z.infer<typeof RequestMatchInputSchema>;
@@ -216,7 +225,8 @@ export type RequestMatchInput = z.infer<typeof RequestMatchInputSchema>;
 export const RequestMatchOutputSchema = z.object({
   targetId: z.string(),
   matchState: MatchStateSchema,
-  revealedInstances: z.array(CourseInstanceSchema).optional(),
+  /** Whether a chat notice was posted (best effort; false when no group or the send failed). */
+  notified: z.boolean(),
 });
 
 export type RequestMatchOutput = z.infer<typeof RequestMatchOutputSchema>;

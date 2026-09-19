@@ -123,6 +123,9 @@ export function SameClassApp() {
   const appId = wamData?.appId ?? ''
   const channelId = wamData?.channelId ?? ''
   const managerId = wamData?.managerId ?? ''
+  // Group chat the command was run from; the app bot posts request/match notices there.
+  const groupId =
+    wamData?.chatType === 'group' && wamData.chatId ? wamData.chatId : undefined
 
   const [screen, setScreen] = useState<Screen>('LOADING')
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -131,6 +134,7 @@ export function SameClassApp() {
   const [poolSize, setPoolSize] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const getProfile = useCallFunction<GetProfileOutput>({
@@ -295,26 +299,31 @@ export function SameClassApp() {
     try {
       const output = readResult(
         RequestMatchOutputSchema,
-        await requestMatch.call({ targetId: selectedId }),
+        await requestMatch.call({ targetId: selectedId, groupId }),
         '같은 반 요청'
       )
       setResults((previous) =>
         previous.map((candidate) =>
           candidate.targetId === output.targetId
-            ? {
-                ...candidate,
-                matchState: output.matchState,
-                revealedInstances: output.revealedInstances,
-              }
+            ? { ...candidate, matchState: output.matchState }
             : candidate
         )
+      )
+      setNotice(
+        output.notified
+          ? output.matchState === 'ACCEPTED'
+            ? '같은 반이 됐어요! 채팅방에 알림을 보냈어요.'
+            : '요청을 보냈어요. 채팅방에 알림을 남겼어요.'
+          : output.matchState === 'ACCEPTED'
+            ? '같은 반이 됐어요!'
+            : '요청을 보냈어요. 상대가 수락하면 같은 반이 돼요.'
       )
     } catch (caught) {
       setError(describeError(caught, '요청을 보내지 못했어요.'))
     } finally {
       setBusy(false)
     }
-  }, [requestMatch, selectedId])
+  }, [groupId, requestMatch, selectedId])
 
   if (wamDataError) {
     return (
@@ -380,8 +389,10 @@ export function SameClassApp() {
           candidate={selected}
           requesting={busy}
           error={error}
+          notice={notice}
           onBack={() => {
             setError(null)
+            setNotice(null)
             setScreen('LIST')
           }}
           onRequest={() => void handleRequest()}
@@ -401,6 +412,7 @@ export function SameClassApp() {
         onSelect={(candidate) => {
           setSelectedId(candidate.targetId)
           setError(null)
+          setNotice(null)
           setScreen('OVERLAY')
         }}
         onEdit={() => {

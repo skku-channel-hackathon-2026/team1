@@ -1,6 +1,7 @@
 // Everytime-style weekly timetable: hour rows, day columns, time-positioned colored blocks.
 // Used three ways: personal editor (click blocks / empty slots), overlay (match highlights),
-// and a tiny thumbnail on candidate cards.
+// and a tiny thumbnail on candidate cards. The overlay never shows the other person's solo
+// classes — only cells where we are in the same room, the same building, or both free.
 import { useMemo, type CSSProperties } from 'react'
 import {
   DAYS,
@@ -22,8 +23,6 @@ export interface TimetableGridProps {
   campus: Campus
   /** Overlap cells from a MatchResult — turns the grid into the overlay view. */
   overlap?: OverlapCell[]
-  /** The other person's full timetable, only after mutual acceptance. */
-  theirs?: CourseInstance[]
   mini?: boolean
   animate?: boolean
   /** Editor mode: click one of my blocks. */
@@ -71,7 +70,7 @@ function hashColor(key: string): string {
   return PALETTE[Math.abs(hash) % PALETTE.length]
 }
 
-type BlockTone = 'mine' | 'same' | 'building' | 'theirs'
+type BlockTone = 'mine' | 'same' | 'building'
 
 interface Block {
   key: string
@@ -82,9 +81,8 @@ interface Block {
   color?: string
   title: string
   meta: string
-  chain: boolean
   order: number
-  instance?: CourseInstance
+  instance: CourseInstance
 }
 
 interface FreeArea {
@@ -93,8 +91,6 @@ interface FreeArea {
   top: number
   height: number
   label: string
-  lunch: boolean
-  chain: boolean
   order: number
 }
 
@@ -102,7 +98,6 @@ export function TimetableGrid({
   mine,
   campus,
   overlap,
-  theirs,
   mini = false,
   animate = false,
   onSelectInstance,
@@ -118,9 +113,7 @@ export function TimetableGrid({
     }
     const latestEnd = Math.max(
       MIN_END_HOUR * 60,
-      ...[...mine, ...(theirs ?? [])].map((instance) =>
-        periodEnd(instance.endPeriod)
-      )
+      ...mine.map((instance) => periodEnd(instance.endPeriod))
     )
     const endHour = Math.ceil(latestEnd / 60)
     const toY = (minute: number) =>
@@ -132,7 +125,7 @@ export function TimetableGrid({
     const myGrid = buildSlotGrid(mine)
 
     for (const instance of mine) {
-      const cells = []
+      const cells: OverlapCell[] = []
       for (let p = instance.startPeriod; p <= instance.endPeriod; p++) {
         const hit = overlapByKey.get(`${instance.day}:${p}`)
         if (hit) cells.push(hit)
@@ -152,30 +145,9 @@ export function TimetableGrid({
         color: overlap ? undefined : hashColor(courseKey(instance)),
         title: instance.subject,
         meta: `${instance.professor} · ${buildingName(campus, instance.room)} ${instance.room}`,
-        chain: cells.some((cell) => cell.chain),
         order: lit ? order++ : -1,
         instance,
       })
-    }
-
-    if (theirs) {
-      const mineIds = new Set(mine.map(instanceId))
-      for (const instance of theirs) {
-        if (mineIds.has(instanceId(instance))) continue
-        blocks.push({
-          key: `theirs:${instanceId(instance)}`,
-          day: instance.day,
-          top: toY(periodStart(instance.startPeriod)),
-          height:
-            toY(periodEnd(instance.endPeriod)) -
-            toY(periodStart(instance.startPeriod)),
-          tone: 'theirs',
-          title: instance.subject,
-          meta: `${instance.professor} · ${buildingName(campus, instance.room)} ${instance.room}`,
-          chain: false,
-          order: order++,
-        })
-      }
     }
 
     for (const cell of overlap ?? []) {
@@ -186,8 +158,6 @@ export function TimetableGrid({
         top: toY(periodStart(cell.period)),
         height: toY(periodEnd(cell.period)) - toY(periodStart(cell.period)),
         label: cell.label,
-        lunch: cell.lunch,
-        chain: cell.chain,
         order: order++,
       })
     }
@@ -215,7 +185,7 @@ export function TimetableGrid({
       (_, index) => START_HOUR + index
     )
     return { blocks, frees, slots, hours, litCount: order }
-  }, [mine, theirs, overlap, campus, hourHeight, editable, onSelectEmpty])
+  }, [mine, overlap, campus, hourHeight, editable, onSelectEmpty])
 
   const bodyHeight = model.hours.length * hourHeight
   const delayFor = (order: number) =>
@@ -290,14 +260,7 @@ export function TimetableGrid({
               .map((free) => (
                 <div
                   key={free.key}
-                  className={[
-                    'et-free',
-                    free.lunch ? 'et-free--lunch' : '',
-                    free.chain ? 'et--chain' : '',
-                    animate ? 'et--lit' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
+                  className={`et-free${animate ? ' et--lit' : ''}`}
                   style={{
                     top: free.top,
                     height: free.height,
@@ -317,9 +280,8 @@ export function TimetableGrid({
                 }
                 if (block.color) style.background = block.color
                 const classes = ['et-block', `et-block--${block.tone}`]
-                if (block.chain) classes.push('et--chain')
                 if (animate && block.order >= 0) classes.push('et--lit')
-                const clickable = editable && block.instance && onSelectInstance
+                const clickable = editable && onSelectInstance
                 if (clickable) classes.push('et-block--clickable')
                 // The thumbnail is color-only; text would overlap at 6px per hour.
                 const content = mini ? null : (
@@ -334,7 +296,7 @@ export function TimetableGrid({
                     type="button"
                     className={classes.join(' ')}
                     style={style}
-                    onClick={() => onSelectInstance?.(block.instance!)}
+                    onClick={() => onSelectInstance?.(block.instance)}
                     title="눌러서 수정"
                   >
                     {content}
@@ -357,7 +319,7 @@ export function TimetableGrid({
   )
 }
 
-export function Legend({ revealed }: { revealed: boolean }) {
+export function Legend() {
   return (
     <div className="sc-legend">
       <span>
@@ -372,22 +334,8 @@ export function Legend({ revealed }: { revealed: boolean }) {
         같은 건물
       </span>
       <span>
-        <span className="sc-legend__swatch et-free et-free--lunch" />
-        점심 함께
-      </span>
-      <span>
         <span className="sc-legend__swatch et-free" />
-        공동 공강
-      </span>
-      {revealed && (
-        <span>
-          <span className="sc-legend__swatch et-block--theirs" />
-          상대 수업
-        </span>
-      )}
-      <span>
-        <span className="sc-legend__swatch et--chain" />
-        수업 끝나고 같이 공강
+        공강
       </span>
     </div>
   )

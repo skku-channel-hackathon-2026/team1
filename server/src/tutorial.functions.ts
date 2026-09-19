@@ -255,21 +255,15 @@ export class TutorialFunctions {
 
     const pool = await listPool(db, channelId);
     const records = await listMatchRecords(db, channelId, memberId);
-    const byId = new Map(pool.map((profile) => [profile.memberId, profile]));
 
     const results: MatchCandidate[] = rankMatches(me, pool).map((result) => {
       const record = records.find((entry) =>
         entry.pair.includes(result.targetId),
       );
-      const matchState = deriveMatchState(record, memberId, result.targetId);
       return {
         ...result,
-        matchState,
+        matchState: deriveMatchState(record, memberId, result.targetId),
         isSeed: isSeedMember(result.targetId),
-        revealedInstances:
-          matchState === "ACCEPTED"
-            ? byId.get(result.targetId)?.instances
-            : undefined,
       };
     });
 
@@ -316,11 +310,38 @@ export class TutorialFunctions {
 
     const record = await requestMatch(db, channelId, memberId, input.targetId);
     const matchState = deriveMatchState(record, memberId, input.targetId);
-    return {
-      targetId: input.targetId,
-      matchState,
-      revealedInstances:
-        matchState === "ACCEPTED" ? target.instances : undefined,
-    };
+    const notified = input.groupId
+      ? await this.notifyGroup(
+          ctx,
+          input.groupId,
+          matchState === "ACCEPTED"
+            ? `🎒 ${me.nickname}님과 ${target.nickname}님이 같은 반이 됐어요! 다음 수업에서 옆자리에 앉아보세요.`
+            : `🙋 ${me.nickname}님이 ${target.nickname}님에게 같은 반 요청을 보냈어요. /tutorial 에서 확인해보세요.`,
+        )
+      : false;
+    return { targetId: input.targetId, matchState, notified };
+  }
+
+  /** Post a notice to the group chat as the app bot. Never fails the caller. */
+  private async notifyGroup(
+    ctx: Context,
+    groupId: string,
+    plainText: string,
+  ): Promise<boolean> {
+    try {
+      const token = await this.tokenManager.getChannelToken({
+        channelId: ctx.channel.id,
+      });
+      const api = this.nativeClient.createProxyApi(token.accessToken);
+      await api.writeGroupMessage({
+        channelId: ctx.channel.id,
+        groupId,
+        broadcast: false,
+        dto: { plainText, botName: "같은 반" },
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

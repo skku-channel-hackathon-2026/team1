@@ -1,9 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
-  DAYS,
-  DAY_LABELS,
   PROXIMITY_LABELS,
-  type Day,
   type MatchCandidate,
   type Profile,
   type Proximity,
@@ -27,7 +24,6 @@ export interface ListScreenProps {
 
 type SortKey = 'score' | 'sameRoom' | 'free'
 type ProximityFilter = 'ALL' | Proximity
-type LunchFilter = 'ANY' | Day
 
 export function ListScreen({
   me,
@@ -42,14 +38,12 @@ export function ListScreen({
 }: ListScreenProps) {
   const [sort, setSort] = useState<SortKey>('score')
   const [proximity, setProximity] = useState<ProximityFilter>('ALL')
-  const [lunch, setLunch] = useState<LunchFilter>('ANY')
   const includeOthers = me.includeOtherDepartments
 
   const filtered = useMemo(() => {
     const list = results.filter((candidate) => {
       if (!includeOthers && candidate.department !== me.department) return false
       if (proximity !== 'ALL' && candidate.proximity !== proximity) return false
-      if (lunch !== 'ANY' && !candidate.lunchDays.includes(lunch)) return false
       return true
     })
     const compare: Record<
@@ -64,7 +58,7 @@ export function ListScreen({
         b.score - a.score,
     }
     return [...list].sort(compare[sort])
-  }, [results, includeOthers, me.department, proximity, lunch, sort])
+  }, [results, includeOthers, me.department, proximity, sort])
 
   const topId = filtered[0]?.targetId
 
@@ -132,18 +126,6 @@ export function ListScreen({
               { value: 'ALL', label: '전체' },
               { value: 'ROOM', label: '같은 강의실' },
               { value: 'BUILDING', label: '같은 건물' },
-            ]}
-          />
-        </div>
-        <div className="sc-row">
-          <span className="sc-filter-label">점심</span>
-          <Segmented<LunchFilter>
-            label="점심 가능 요일"
-            value={lunch}
-            onChange={setLunch}
-            options={[
-              { value: 'ANY', label: '상관없음' },
-              ...DAYS.map((day) => ({ value: day, label: DAY_LABELS[day] })),
             ]}
           />
         </div>
@@ -230,9 +212,6 @@ function CandidateCard({
             <Badge tone={PROXIMITY_TONE[candidate.proximity]}>
               {PROXIMITY_LABELS[candidate.proximity]}
             </Badge>
-            {candidate.chains.length > 0 && (
-              <Badge tone="tint">수업 끝나고 같이 공강</Badge>
-            )}
             {stateLabel && (
               <Badge
                 tone={candidate.matchState === 'ACCEPTED' ? 'success' : 'soft'}
@@ -257,9 +236,7 @@ function CandidateCard({
         </div>
         <div className="sc-card__side">
           <div className="sc-score">
-            <span className="sc-score__value">
-              {candidate.score.toFixed(1)}
-            </span>
+            <span className="sc-score__value">{candidate.score}</span>
             <span className="sc-score__unit">점</span>
           </div>
           <TimetableGrid

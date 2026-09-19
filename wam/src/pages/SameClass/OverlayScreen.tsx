@@ -16,20 +16,16 @@ export interface OverlayScreenProps {
   candidate: MatchCandidate
   requesting: boolean
   error: string | null
+  notice: string | null
   onBack: () => void
   onRequest: () => void
 }
 
-const BREAKDOWN_LABELS: {
-  key: keyof MatchCandidate['breakdown']
-  label: string
-}[] = [
+const PART_LABELS: { key: keyof MatchCandidate['parts']; label: string }[] = [
   { key: 'sameRoom', label: '같은 강의실' },
   { key: 'sameBuilding', label: '같은 건물' },
-  { key: 'sharedFree', label: '공강 겹침' },
-  { key: 'chain', label: '수업 끝나고 같이 공강' },
+  { key: 'free', label: '공강' },
   { key: 'walk', label: '같은 방향 이동' },
-  { key: 'lunch', label: '점심 겹침' },
 ]
 
 export function OverlayScreen({
@@ -37,11 +33,10 @@ export function OverlayScreen({
   candidate,
   requesting,
   error,
+  notice,
   onBack,
   onRequest,
 }: OverlayScreenProps) {
-  const revealed =
-    candidate.matchState === 'ACCEPTED' && !!candidate.revealedInstances
   const stateLabel = MATCH_STATE_LABELS[candidate.matchState]
 
   const buttonLabel =
@@ -73,10 +68,8 @@ export function OverlayScreen({
           <div className="sc-stack sc-stack--tight sc-grow">
             <div className="sc-row">
               <div className="sc-score sc-score--lg">
-                <span className="sc-score__value">
-                  {candidate.score.toFixed(1)}
-                </span>
-                <span className="sc-score__unit">점</span>
+                <span className="sc-score__value">{candidate.score}</span>
+                <span className="sc-score__unit">/ 100</span>
               </div>
               <h1 className="sc-title">{candidate.nickname}</h1>
               <Badge tone="soft">{candidate.department}</Badge>
@@ -112,21 +105,23 @@ export function OverlayScreen({
 
       <section className="sc-section">
         <TimetableGrid
-          key={`${candidate.targetId}:${revealed ? 'revealed' : 'summary'}`}
+          key={candidate.targetId}
           mine={me.instances}
           campus={me.campus}
           overlap={candidate.overlapCells}
-          theirs={revealed ? candidate.revealedInstances : undefined}
           animate
         />
-        <Legend revealed={revealed} />
+        <Legend />
       </section>
 
       <section className="sc-section">
-        <h2 className="sc-title-sm">점수는 어떻게 나왔나</h2>
+        <div className="sc-row sc-row--between">
+          <h2 className="sc-title-sm">점수는 어떻게 나왔나</h2>
+          <span className="sc-caption">내 시간표와 똑같으면 100점</span>
+        </div>
         <div className="sc-breakdown">
-          {BREAKDOWN_LABELS.map(({ key, label }) => {
-            const value = candidate.breakdown[key]
+          {PART_LABELS.map(({ key, label }) => {
+            const value = candidate.parts[key]
             const share =
               candidate.score > 0 ? (value / candidate.score) * 100 : 0
             return (
@@ -165,12 +160,13 @@ export function OverlayScreen({
         )}
       </section>
 
+      {notice && <p className="sc-notice">{notice}</p>}
       {error && <p className="sc-error">{error}</p>}
 
       <p className="sc-caption">
-        {revealed
-          ? '서로 수락해서 전체 시간표와 강의실이 열렸어요. 다음 수업에서 옆자리에 앉기만 하면 돼요.'
-          : '시간표는 위치 정보예요. 서로 수락하기 전에는 겹치는 칸만 보이고, 그 칸은 나도 같은 곳에 있는 시간이에요. 상대의 단독 일정과 강의실 호수는 열리지 않아요.'}
+        시간표는 위치 정보예요. 같은 반이 된 뒤에도 겹치는 칸만 보여요. 그 칸은
+        나도 같은 곳에 있는 시간이라 새로 드러나는 건 없어요. 상대의 단독 일정은
+        서버 밖으로 나오지 않아요.
       </p>
     </div>
   )

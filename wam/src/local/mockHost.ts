@@ -114,19 +114,13 @@ async function callFunction<T>({ name, params }: CallFunctionArgs): Promise<T> {
     case TUTORIAL_FUNCTIONS.match: {
       if (!me) return { me: null, poolSize: 0, results: [] } as T
       const everyone = pool(store)
-      const byId = new Map(everyone.map((p) => [p.memberId, p]))
       const results: MatchCandidate[] = rankMatches(me, everyone).map(
         (result) => {
           const record = store.matches[pairKey(managerId, result.targetId)]
-          const matchState = deriveState(record, managerId, result.targetId)
           return {
             ...result,
-            matchState,
+            matchState: deriveState(record, managerId, result.targetId),
             isSeed: isSeedMember(result.targetId),
-            revealedInstances:
-              matchState === 'ACCEPTED'
-                ? byId.get(result.targetId)?.instances
-                : undefined,
           }
         }
       )
@@ -156,12 +150,16 @@ async function callFunction<T>({ name, params }: CallFunctionArgs): Promise<T> {
       store.matches[key] = record
       writeStore(store)
       const matchState = deriveState(record, managerId, targetId)
-      return {
-        targetId,
-        matchState,
-        revealedInstances:
-          matchState === 'ACCEPTED' ? target.instances : undefined,
-      } as T
+      const groupId = typeof params.groupId === 'string' ? params.groupId : ''
+      if (groupId) {
+        console.info(
+          `[같은 반] (로컬) 채팅방 ${groupId}에 봇 메시지: ` +
+            (matchState === 'ACCEPTED'
+              ? `${me.nickname}님과 ${target.nickname}님이 같은 반이 됐어요!`
+              : `${me.nickname}님이 ${target.nickname}님에게 같은 반 요청을 보냈어요.`)
+        )
+      }
+      return { targetId, matchState, notified: Boolean(groupId) } as T
     }
 
     default:
