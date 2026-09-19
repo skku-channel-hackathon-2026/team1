@@ -79,7 +79,7 @@ export function CourseEditor({
         <Field label="과목명">
           <Input
             autoFocus
-            placeholder="예: 경영학원론"
+            placeholder="예: 프로그래밍기초"
             value={form.subject}
             maxLength={40}
             onChange={(event) =>
@@ -92,7 +92,7 @@ export function CourseEditor({
         </Field>
         <Field label="교수">
           <Input
-            placeholder="예: 김예진"
+            placeholder="예: 김태영"
             value={form.professor}
             maxLength={30}
             onChange={(event) =>
@@ -168,7 +168,7 @@ export function CourseEditor({
         </div>
         <Field label="강의실 번호 (5자리)">
           <Input
-            placeholder="예: 31207"
+            placeholder="예: 22301"
             value={form.room}
             maxLength={5}
             inputMode="numeric"

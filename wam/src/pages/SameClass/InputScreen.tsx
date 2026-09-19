@@ -188,7 +188,7 @@ export function InputScreen({
           </Field>
           <Field label="학과">
             <Input
-              placeholder="예: 경영학과"
+              placeholder="예: 소프트웨어학과"
               value={draft.department}
               maxLength={30}
               onChange={(event) => update({ department: event.target.value })}
