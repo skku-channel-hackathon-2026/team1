@@ -156,27 +156,6 @@ export function buildSlotGrid(instances: CourseInstance[]): SlotGrid {
   return grid;
 }
 
-function minutes(time: string): number {
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
-}
-
-const LUNCH_WINDOW = { start: minutes("11:30"), end: minutes("13:30") };
-
-/** Periods that overlap the 11:30–13:30 lunch window by at least an hour. */
-export const LUNCH_PERIODS: number[] = Object.entries(PERIOD_TIMES)
-  .filter(([, time]) => {
-    const overlap =
-      Math.min(minutes(time.end), LUNCH_WINDOW.end) -
-      Math.max(minutes(time.start), LUNCH_WINDOW.start);
-    return overlap >= 60;
-  })
-  .map(([period]) => Number(period));
-
-export function isLunchPeriod(period: number): boolean {
-  return LUNCH_PERIODS.includes(period);
-}
-
 /** Highest period that any instance touches, so grids can stay compact. */
 export function lastPeriodOf(instances: CourseInstance[], minimum = 6): number {
   return Math.max(minimum, ...instances.map((instance) => instance.endPeriod));

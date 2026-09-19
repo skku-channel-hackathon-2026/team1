@@ -163,8 +163,6 @@ export const MatchResultSchema = z.object({
       sameRoom: z.number(),
       sameBuilding: z.number(),
       sharedFree: z.number(),
-      chain: z.number(),
-      lunch: z.number(),
     }),
   }),
   proximity: z.enum(["ROOM", "BUILDING", "FREE"]),
@@ -175,9 +173,6 @@ export const MatchResultSchema = z.object({
   ),
   sharedFreeSlots: z.array(SlotSchema),
   sharedFreeDays: z.array(DaySchema),
-  chains: z.array(
-    SlotSchema.extend({ freePeriod: z.number().int(), subject: z.string() }),
-  ),
   overlapCells: z.array(
     SlotSchema.extend({
       kind: z.enum(["SAME", "BUILDING", "FREE"]),

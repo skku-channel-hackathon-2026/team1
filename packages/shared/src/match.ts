@@ -1,10 +1,9 @@
-// 「같은 반」 similarity: physical proximity per slot + transition bonuses.
+// 「같은 반」 similarity: how much of my week this person physically shares.
 // Pure functions only. Runs inside a single Function call on the Worker and in unit tests.
 //
-// Presentation model (what the WAM shows): a 0–100 score where 100 means "same timetable as
-// mine", split into three parts — 같은 강의실 / 같은 건물 / 공강. Internally the
-// free-period part still rewards "class → shared free" chains and lunch-hour overlap; those are
-// folded into 공강 for display, per the team's decision to keep the UI to one idea of 공강.
+// Score = sum over every weekday period of a proximity weight, normalised so that a person
+// with exactly my timetable scores 100. Three parts, shown as-is in the UI:
+//   같은 강의실 / 같은 건물·다른 강의실 / 공강.
 
 import {
   DAYS,
@@ -17,7 +16,6 @@ import {
   courseKey,
   floorOf,
   instanceId,
-  isLunchPeriod,
   type CourseInstance,
   type Day,
   type Profile,
@@ -25,13 +23,10 @@ import {
 } from "./timetable.js";
 
 export const WEIGHTS = {
-  sameRoom: 1.0, // w1 — flat per shared period (rarity weighting removed by team decision)
-  sameFloor: 0.45, // w2a
-  sameBuilding: 0.25, // w2b
-  sharedFree: 0.15, // w3
-  // Free-period bonuses are kept small on purpose: sharing a class must outweigh sharing a gap.
-  chain: 1.0,
-  lunch: 0.5,
+  sameRoom: 1.0, // same class, per period
+  sameFloor: 0.45, // same building and floor, different room
+  sameBuilding: 0.25, // same building, different floor
+  sharedFree: 0.15, // both free
 } as const;
 
 export type Weights = { [K in keyof typeof WEIGHTS]: number };
@@ -54,13 +49,6 @@ export interface BuildingOverlap extends Slot {
   sameFloor: boolean;
 }
 
-export interface Chain {
-  day: Day;
-  period: number; // last period of the shared class
-  freePeriod: number; // the shared free period right after it
-  subject: string;
-}
-
 export type OverlapKind = "SAME" | "BUILDING" | "FREE";
 
 /** One highlighted cell of the overlaid timetable. Never reveals the other person's solo classes. */
@@ -74,15 +62,13 @@ export interface RawBreakdown {
   sameRoom: number;
   sameBuilding: number;
   sharedFree: number;
-  chain: number;
-  lunch: number;
 }
 
 /** What the UI shows: points out of 100, summing to `score`. */
 export interface ScoreParts {
   sameRoom: number;
   sameBuilding: number;
-  free: number; // sharedFree + chain + lunch
+  free: number;
 }
 
 export interface MatchResult {
@@ -100,7 +86,6 @@ export interface MatchResult {
   sameBuilding: BuildingOverlap[];
   sharedFreeSlots: Slot[];
   sharedFreeDays: Day[];
-  chains: Chain[];
   overlapCells: OverlapCell[];
   dailySummary: Partial<Record<Day, string>>;
   reasons: string[];
@@ -122,7 +107,6 @@ interface RawPair {
   sameBuilding: BuildingOverlap[];
   sharedFreeSlots: Slot[];
   sharedFreeDays: Day[];
-  chains: Chain[];
   overlapCells: OverlapCell[];
 }
 
@@ -134,15 +118,11 @@ function scoreRaw(me: Profile, other: Profile, weights: Weights): RawPair {
     sameRoom: 0,
     sameBuilding: 0,
     sharedFree: 0,
-    chain: 0,
-    lunch: 0,
   };
   const sameRoomById = new Map<string, CourseInstance>();
   const sameBuilding: BuildingOverlap[] = [];
   const sharedFreeSlots: Slot[] = [];
   const freeDaySet = new Set<Day>();
-  const lunchDaySet = new Set<Day>();
-  const chains: Chain[] = [];
   const overlapCells: OverlapCell[] = [];
 
   for (const day of DAYS) {
@@ -184,36 +164,16 @@ function scoreRaw(me: Profile, other: Profile, weights: Weights): RawPair {
         breakdown.sharedFree += weights.sharedFree;
         sharedFreeSlots.push({ day, period: p });
         freeDaySet.add(day);
-        if (isLunchPeriod(p)) lunchDaySet.add(day);
         overlapCells.push({ day, period: p, kind: "FREE", label: "공강" });
-      }
-    }
-
-    // Chain: a shared class whose next period is free for both — "수업 끝나고 같이".
-    for (let p = MIN_PERIOD; p < MAX_PERIOD; p++) {
-      const sa = a[p];
-      const sb = b[p];
-      if (!isClass(sa) || !isClass(sb)) continue;
-      if (instanceId(sa.instance) !== instanceId(sb.instance)) continue;
-      if (sa.instance.endPeriod !== p) continue;
-      if (a[p + 1].kind === "FREE" && b[p + 1].kind === "FREE") {
-        chains.push({
-          day,
-          period: p,
-          freePeriod: p + 1,
-          subject: sa.instance.subject,
-        });
       }
     }
   }
 
-  breakdown.chain = weights.chain * chains.length;
-  breakdown.lunch = weights.lunch * lunchDaySet.size;
   for (const key of Object.keys(breakdown) as (keyof RawBreakdown)[]) {
     breakdown[key] = round2(breakdown[key]);
   }
   const score = round2(
-    Object.values(breakdown).reduce((sum, value) => sum + value, 0),
+    breakdown.sameRoom + breakdown.sameBuilding + breakdown.sharedFree,
   );
 
   return {
@@ -223,16 +183,11 @@ function scoreRaw(me: Profile, other: Profile, weights: Weights): RawPair {
     sameBuilding,
     sharedFreeSlots,
     sharedFreeDays: DAYS.filter((day) => freeDaySet.has(day)),
-    chains,
     overlapCells,
   };
 }
 
-/**
- * The ceiling for `me`: what a person with exactly my timetable would score.
- * Dividing by it turns raw weights into a 0–100 score that reads as "how much of my week
- * this person shares".
- */
+/** The ceiling for `me`: what a person with exactly my timetable would score. */
 export function selfScore(me: Profile, weights: Weights = WEIGHTS): number {
   return scoreRaw(me, me, weights).score;
 }
@@ -248,15 +203,14 @@ export function scorePair(
   const parts: ScoreParts = {
     sameRoom: round1(raw.breakdown.sameRoom * scale),
     sameBuilding: round1(raw.breakdown.sameBuilding * scale),
-    free: round1(
-      (raw.breakdown.sharedFree + raw.breakdown.chain + raw.breakdown.lunch) *
-        scale,
-    ),
+    free: round1(raw.breakdown.sharedFree * scale),
   };
-  // The displayed total is the rounded sum of the displayed parts, so the four numbers the
-  // user sees always add up to the score. Ranking still uses raw.score.
-  const partsSum = parts.sameRoom + parts.sameBuilding + parts.free;
-  const score = Math.min(100, Math.round(partsSum));
+  // The displayed total is the rounded sum of the displayed parts, so the numbers the user
+  // sees always add up. Ranking still uses raw.score.
+  const score = Math.min(
+    100,
+    Math.round(parts.sameRoom + parts.sameBuilding + parts.free),
+  );
 
   const sameCourseCount = new Set(raw.sameRoom.map(courseKey)).size;
   const proximity: Proximity =
@@ -280,7 +234,6 @@ export function scorePair(
     sameBuilding: raw.sameBuilding,
     sharedFreeSlots: raw.sharedFreeSlots,
     sharedFreeDays: raw.sharedFreeDays,
-    chains: raw.chains,
     overlapCells: raw.overlapCells,
     dailySummary: buildDailySummary(raw.overlapCells),
     reasons: buildReasons({
@@ -353,7 +306,7 @@ function periodRange(from: number, to: number): string {
   return from === to ? `${from}교시` : `${from}~${to}교시`;
 }
 
-/** "수: 2교시 같이 듣기 → 공강 1시간 → 4교시 같이 듣기 → 공강 1시간" */
+/** "수: 2교시 같이 듣기 → 공강 1시간 → 4교시 같이 듣기" */
 export function buildDailySummary(
   cells: OverlapCell[],
 ): Partial<Record<Day, string>> {

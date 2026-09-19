@@ -149,7 +149,7 @@ assert.equal(match.poolSize, 59); // 58 seeds (29 per campus) + me
 assert.equal(match.results.length, 29); // 자과캠 시드 29명 제외
 assert.equal(match.results[0].nickname, "하늘");
 assert.ok(match.results[0].score > 0 && match.results[0].score <= 100);
-assert.equal(match.results[0].raw.breakdown.chain, 3);
+assert.ok(match.results[0].raw.breakdown.sharedFree > 0);
 assert.ok(!("revealedInstances" in match.results[0]));
 assert.equal(match.results[0].proximity, "ROOM");
 assert.equal(match.results[0].matchState, "NONE");

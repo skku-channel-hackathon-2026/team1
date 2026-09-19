@@ -3,7 +3,6 @@ import test from "node:test";
 import {
   DEMO_PRESET,
   DEMO_PRESETS,
-  LUNCH_PERIODS,
   SEED_PROFILES,
   seedProfilesOn,
   buildDailySummary,
@@ -33,10 +32,6 @@ test("free periods exist only between the first and last class of a day", () => 
   // 금: 3교시 하나만 → 공강 없음
   assert.equal(grid.FRI[2].kind, "NONE");
   assert.equal(grid.FRI[4].kind, "NONE");
-});
-
-test("lunch is the period that sits inside 11:30–13:30 (internal weight only)", () => {
-  assert.deepEqual(LUNCH_PERIODS, [3]);
 });
 
 test("building keys are campus-scoped so code 31 never collides", () => {
@@ -105,16 +100,10 @@ test("the 자과캠 demo has its own courses and the same match shape", () => {
   );
 });
 
-test("하늘 ranks first with a Wednesday chain, described as plain 공강", () => {
+test("하늘 ranks first and the Wednesday summary reads class → gap → class", () => {
   const [top] = rankMatches(me, SEED_PROFILES);
   assert.equal(top.nickname, "하늘");
   assert.equal(top.proximity, "ROOM");
-  assert.ok(
-    top.chains.some((chain) => chain.day === "WED" && chain.period === 2),
-  );
-  assert.ok(
-    top.chains.some((chain) => chain.day === "WED" && chain.period === 4),
-  );
   assert.ok(top.sharedFreeDays.includes("WED"));
   assert.equal(
     top.dailySummary.WED,
@@ -140,7 +129,6 @@ test("scores are 0–100 and the four displayed parts add up", () => {
     );
   }
   const [top] = results;
-  assert.equal(top.raw.breakdown.chain, 3); // 3 chains × 1.0, folded into parts.free
   assert.ok(top.parts.free > 0);
   // Sharing classes must matter more than sharing gaps for the people who share classes.
   assert.ok(top.parts.sameRoom > top.parts.free);
@@ -229,8 +217,7 @@ function mondayProfile(
   };
 }
 
-test("a chain still scores internally, but the sentence just says 공강", () => {
-  // Shared class at 2, I alone have class at 3, both free at 4 → no chain.
+test("a gap between shared classes is just 공강, whatever sits around it", () => {
   const a = mondayProfile("a", [
     ["공유", 2, 2, "31101"],
     ["나만", 3, 3, "32101"],
@@ -241,14 +228,12 @@ test("a chain still scores internally, but the sentence just says 공강", () =>
     ["끝", 5, 5, "50101"],
   ]);
   const gap = scorePair(a, b);
-  assert.equal(gap.chains.length, 0);
-  assert.equal(gap.raw.breakdown.chain, 0);
+  assert.equal(gap.raw.breakdown.sharedFree, 0.15); // period 4 only
   assert.equal(
     gap.dailySummary.MON,
     "2교시 같이 듣기 → 공강 1시간 → 5교시 같이 듣기",
   );
 
-  // Two-period shared class 2–3, both free at 4 → one chain ending at period 3.
   const c = mondayProfile("c", [
     ["긴수업", 2, 3, "31101"],
     ["끝", 5, 5, "33101"],
@@ -258,10 +243,6 @@ test("a chain still scores internally, but the sentence just says 공강", () =>
     ["끝", 5, 5, "33101"],
   ]);
   const adjacent = scorePair(c, d);
-  assert.deepEqual(adjacent.chains, [
-    { day: "MON", period: 3, freePeriod: 4, subject: "긴수업" },
-  ]);
-  assert.equal(adjacent.raw.breakdown.chain, 1);
   assert.equal(
     adjacent.dailySummary.MON,
     "2~3교시 같이 듣기 → 공강 1시간 → 5교시 같이 듣기",
