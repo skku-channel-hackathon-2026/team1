@@ -150,16 +150,16 @@ async function callFunction<T>({ name, params }: CallFunctionArgs): Promise<T> {
       store.matches[key] = record
       writeStore(store)
       const matchState = deriveState(record, managerId, targetId)
-      const groupId = typeof params.groupId === 'string' ? params.groupId : ''
-      if (groupId) {
+      const notified = !isSeedMember(targetId)
+      if (notified) {
         console.info(
-          `[같은 반] (로컬) 채팅방 ${groupId}에 봇 메시지: ` +
+          `[같은 반] (로컬) ${target.nickname}에게 DM: ` +
             (matchState === 'ACCEPTED'
-              ? `${me.nickname}님과 ${target.nickname}님이 같은 반이 됐어요!`
-              : `${me.nickname}님이 ${target.nickname}님에게 같은 반 요청을 보냈어요.`)
+              ? `${me.nickname}님과 같은 반이 됐어요!`
+              : `${me.nickname}님이 같은 반 요청을 보냈어요.`)
         )
       }
-      return { targetId, matchState, notified: Boolean(groupId) } as T
+      return { targetId, matchState, notified } as T
     }
 
     default:

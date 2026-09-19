@@ -164,23 +164,17 @@ const request = await call(
   "m1",
 );
 assert.equal(request.matchState, "ACCEPTED");
-assert.equal(request.notified, false); // no groupId → no chat notice
+assert.equal(request.notified, false); // seeds have no manager to DM
 const again = await call("tutorial.match", {}, "m1");
 assert.equal(again.results[0].matchState, "ACCEPTED");
 assert.ok(!("revealedInstances" in again.results[0]));
-// With a groupId the bot send is attempted; locally there is no real token so it fails softly.
-const withGroup = await call(
-  "tutorial.requestMatch",
-  { targetId: match.results[1].targetId, groupId: "local-group" },
-  "m1",
-);
-assert.equal(withGroup.matchState, "ACCEPTED");
-assert.equal(typeof withGroup.notified, "boolean");
 
 // 4. A second real manager joins: request flows one way, then both ways.
 await call("tutorial.saveProfile", { ...minji, nickname: "두번째" }, "m2");
 const fromTwo = await call("tutorial.requestMatch", { targetId: "m1" }, "m2");
 assert.equal(fromTwo.matchState, "REQUESTED");
+// A real manager target triggers the DM path; locally there is no channel token, so it fails softly.
+assert.equal(fromTwo.notified, false);
 const seenByOne = await call("tutorial.match", {}, "m1");
 const two = seenByOne.results.find((r) => r.targetId === "m2");
 assert.equal(two.matchState, "RECEIVED");
@@ -206,5 +200,5 @@ assert.ok(!afterDelete.results.some((r) => r.targetId === "m1"));
 await call("tutorial.deleteProfile", {}, "m2");
 
 console.log(
-  `PASS: 같은 반 profile upsert, seeded ranking (하늘 first of 29, match in ${elapsed}ms), request/accept state, overlap-only after accept, chat notice flag, campus hard filter, delete`,
+  `PASS: 같은 반 profile upsert, seeded ranking (하늘 first of 29, match in ${elapsed}ms), request/accept state, overlap-only after accept, DM notice flag, campus hard filter, delete`,
 );

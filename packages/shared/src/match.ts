@@ -2,7 +2,7 @@
 // Pure functions only. Runs inside a single Function call on the Worker and in unit tests.
 //
 // Presentation model (what the WAM shows): a 0–100 score where 100 means "same timetable as
-// mine", split into four parts — 같은 강의실 / 같은 건물 / 공강 / 같은 방향 이동. Internally the
+// mine", split into three parts — 같은 강의실 / 같은 건물 / 공강. Internally the
 // free-period part still rewards "class → shared free" chains and lunch-hour overlap; those are
 // folded into 공강 for display, per the team's decision to keep the UI to one idea of 공강.
 
@@ -30,7 +30,6 @@ export const WEIGHTS = {
   sameBuilding: 0.25, // w2b
   sharedFree: 0.15, // w3
   chain: 3.0,
-  walk: 1.0,
   lunch: 2.0,
 } as const;
 
@@ -61,14 +60,6 @@ export interface Chain {
   subject: string;
 }
 
-export interface Walk {
-  day: Day;
-  fromPeriod: number;
-  toPeriod: number;
-  fromBuilding: string;
-  toBuilding: string;
-}
-
 export type OverlapKind = "SAME" | "BUILDING" | "FREE";
 
 /** One highlighted cell of the overlaid timetable. Never reveals the other person's solo classes. */
@@ -83,7 +74,6 @@ export interface RawBreakdown {
   sameBuilding: number;
   sharedFree: number;
   chain: number;
-  walk: number;
   lunch: number;
 }
 
@@ -92,7 +82,6 @@ export interface ScoreParts {
   sameRoom: number;
   sameBuilding: number;
   free: number; // sharedFree + chain + lunch
-  walk: number;
 }
 
 export interface MatchResult {
@@ -111,7 +100,6 @@ export interface MatchResult {
   sharedFreeSlots: Slot[];
   sharedFreeDays: Day[];
   chains: Chain[];
-  walks: Walk[];
   overlapCells: OverlapCell[];
   dailySummary: Partial<Record<Day, string>>;
   reasons: string[];
@@ -152,7 +140,6 @@ interface RawPair {
   sharedFreeSlots: Slot[];
   sharedFreeDays: Day[];
   chains: Chain[];
-  walks: Walk[];
   overlapCells: OverlapCell[];
 }
 
@@ -170,7 +157,6 @@ function scoreRaw(
     sameBuilding: 0,
     sharedFree: 0,
     chain: 0,
-    walk: 0,
     lunch: 0,
   };
   const sameRoomById = new Map<string, CourseInstance>();
@@ -179,7 +165,6 @@ function scoreRaw(
   const freeDaySet = new Set<Day>();
   const lunchDaySet = new Set<Day>();
   const chains: Chain[] = [];
-  const walks: Walk[] = [];
   const overlapCells: OverlapCell[] = [];
 
   for (const day of DAYS) {
@@ -242,31 +227,9 @@ function scoreRaw(
         });
       }
     }
-
-    // Walk: two consecutive periods where both of us move between the same buildings.
-    for (let p = MIN_PERIOD; p < MAX_PERIOD; p++) {
-      const [a0, a1, b0, b1] = [a[p], a[p + 1], b[p], b[p + 1]];
-      if (!isClass(a0) || !isClass(a1) || !isClass(b0) || !isClass(b1))
-        continue;
-      const from = buildingKey(me.campus, a0.instance.room);
-      const to = buildingKey(me.campus, a1.instance.room);
-      if (
-        from === buildingKey(other.campus, b0.instance.room) &&
-        to === buildingKey(other.campus, b1.instance.room)
-      ) {
-        walks.push({
-          day,
-          fromPeriod: p,
-          toPeriod: p + 1,
-          fromBuilding: buildingName(me.campus, a0.instance.room),
-          toBuilding: buildingName(me.campus, a1.instance.room),
-        });
-      }
-    }
   }
 
   breakdown.chain = weights.chain * chains.length;
-  breakdown.walk = weights.walk * walks.length;
   breakdown.lunch = weights.lunch * lunchDaySet.size;
   for (const key of Object.keys(breakdown) as (keyof RawBreakdown)[]) {
     breakdown[key] = round2(breakdown[key]);
@@ -283,7 +246,6 @@ function scoreRaw(
     sharedFreeSlots,
     sharedFreeDays: DAYS.filter((day) => freeDaySet.has(day)),
     chains,
-    walks,
     overlapCells,
   };
 }
@@ -317,12 +279,10 @@ export function scorePair(
       (raw.breakdown.sharedFree + raw.breakdown.chain + raw.breakdown.lunch) *
         scale,
     ),
-    walk: round1(raw.breakdown.walk * scale),
   };
   // The displayed total is the rounded sum of the displayed parts, so the four numbers the
   // user sees always add up to the score. Ranking still uses raw.score.
-  const partsSum =
-    parts.sameRoom + parts.sameBuilding + parts.free + parts.walk;
+  const partsSum = parts.sameRoom + parts.sameBuilding + parts.free;
   const score = Math.min(100, Math.round(partsSum));
 
   const sameCourseCount = new Set(raw.sameRoom.map(courseKey)).size;
@@ -348,7 +308,6 @@ export function scorePair(
     sharedFreeSlots: raw.sharedFreeSlots,
     sharedFreeDays: raw.sharedFreeDays,
     chains: raw.chains,
-    walks: raw.walks,
     overlapCells: raw.overlapCells,
     dailySummary: buildDailySummary(raw.overlapCells),
     reasons: buildReasons({

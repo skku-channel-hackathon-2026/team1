@@ -3,10 +3,9 @@ import {
   PROXIMITY_LABELS,
   type MatchCandidate,
   type Profile,
-  type Proximity,
 } from '@tutorial/shared'
 
-import { TimetableGrid } from './TimetableGrid'
+import { Legend, TimetableGrid } from './TimetableGrid'
 import { MATCH_STATE_LABELS, PROXIMITY_TONE } from './labels'
 import { Badge, Button, Segmented, Switch } from './ui'
 
@@ -23,7 +22,6 @@ export interface ListScreenProps {
 }
 
 type SortKey = 'score' | 'sameRoom' | 'free'
-type ProximityFilter = 'ALL' | Proximity
 
 export function ListScreen({
   me,
@@ -37,13 +35,11 @@ export function ListScreen({
   onScopeChange,
 }: ListScreenProps) {
   const [sort, setSort] = useState<SortKey>('score')
-  const [proximity, setProximity] = useState<ProximityFilter>('ALL')
   const includeOthers = me.includeOtherDepartments
 
   const filtered = useMemo(() => {
     const list = results.filter((candidate) => {
       if (!includeOthers && candidate.department !== me.department) return false
-      if (proximity !== 'ALL' && candidate.proximity !== proximity) return false
       return true
     })
     const compare: Record<
@@ -58,7 +54,7 @@ export function ListScreen({
         b.score - a.score,
     }
     return [...list].sort(compare[sort])
-  }, [results, includeOthers, me.department, proximity, sort])
+  }, [results, includeOthers, me.department, sort])
 
   const topId = filtered[0]?.targetId
 
@@ -117,19 +113,6 @@ export function ListScreen({
           />
         </div>
         <div className="sc-row">
-          <span className="sc-filter-label">근접</span>
-          <Segmented<ProximityFilter>
-            label="근접 등급"
-            value={proximity}
-            onChange={setProximity}
-            options={[
-              { value: 'ALL', label: '전체' },
-              { value: 'ROOM', label: '같은 강의실' },
-              { value: 'BUILDING', label: '같은 건물' },
-            ]}
-          />
-        </div>
-        <div className="sc-row">
           <Switch
             checked={includeOthers}
             onChange={onScopeChange}
@@ -153,6 +136,15 @@ export function ListScreen({
         <p className="sc-body-sm sc-muted">
           이 조건에 맞는 사람이 없어요. 필터를 바꿔보세요.
         </p>
+      )}
+
+      {filtered.length > 0 && (
+        <div className="sc-row sc-row--between">
+          <span className="sc-caption">
+            카드의 작은 시간표는 나와 겹치는 칸만 색으로 표시해요
+          </span>
+          <Legend />
+        </div>
       )}
 
       <div className="sc-list">

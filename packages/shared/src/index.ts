@@ -152,7 +152,6 @@ export const MatchResultSchema = z.object({
     sameRoom: z.number(),
     sameBuilding: z.number(),
     free: z.number(),
-    walk: z.number(),
   }),
   raw: z.object({
     score: z.number(),
@@ -161,7 +160,6 @@ export const MatchResultSchema = z.object({
       sameBuilding: z.number(),
       sharedFree: z.number(),
       chain: z.number(),
-      walk: z.number(),
       lunch: z.number(),
     }),
   }),
@@ -175,15 +173,6 @@ export const MatchResultSchema = z.object({
   sharedFreeDays: z.array(DaySchema),
   chains: z.array(
     SlotSchema.extend({ freePeriod: z.number().int(), subject: z.string() }),
-  ),
-  walks: z.array(
-    z.object({
-      day: DaySchema,
-      fromPeriod: z.number().int(),
-      toPeriod: z.number().int(),
-      fromBuilding: z.string(),
-      toBuilding: z.string(),
-    }),
   ),
   overlapCells: z.array(
     SlotSchema.extend({
@@ -216,8 +205,6 @@ export type MatchOutput = z.infer<typeof MatchOutputSchema>;
 
 export const RequestMatchInputSchema = z.object({
   targetId: z.string().min(1),
-  // Group chat the WAM was opened from; when present, the app bot posts a notice there.
-  groupId: z.string().optional(),
 });
 
 export type RequestMatchInput = z.infer<typeof RequestMatchInputSchema>;
@@ -225,7 +212,7 @@ export type RequestMatchInput = z.infer<typeof RequestMatchInputSchema>;
 export const RequestMatchOutputSchema = z.object({
   targetId: z.string(),
   matchState: MatchStateSchema,
-  /** Whether a chat notice was posted (best effort; false when no group or the send failed). */
+  /** Whether a direct message reached the other manager (best effort; false for seeds or on failure). */
   notified: z.boolean(),
 });
 

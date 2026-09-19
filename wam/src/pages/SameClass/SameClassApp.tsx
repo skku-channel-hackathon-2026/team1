@@ -123,9 +123,6 @@ export function SameClassApp() {
   const appId = wamData?.appId ?? ''
   const channelId = wamData?.channelId ?? ''
   const managerId = wamData?.managerId ?? ''
-  // Group chat the command was run from; the app bot posts request/match notices there.
-  const groupId =
-    wamData?.chatType === 'group' && wamData.chatId ? wamData.chatId : undefined
 
   const [screen, setScreen] = useState<Screen>('LOADING')
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -299,7 +296,7 @@ export function SameClassApp() {
     try {
       const output = readResult(
         RequestMatchOutputSchema,
-        await requestMatch.call({ targetId: selectedId, groupId }),
+        await requestMatch.call({ targetId: selectedId }),
         '같은 반 요청'
       )
       setResults((previous) =>
@@ -312,8 +309,8 @@ export function SameClassApp() {
       setNotice(
         output.notified
           ? output.matchState === 'ACCEPTED'
-            ? '같은 반이 됐어요! 채팅방에 알림을 보냈어요.'
-            : '요청을 보냈어요. 채팅방에 알림을 남겼어요.'
+            ? '같은 반이 됐어요! 상대에게 다이렉트 메시지를 보냈어요.'
+            : '요청을 보냈어요. 상대에게 다이렉트 메시지로 알렸어요.'
           : output.matchState === 'ACCEPTED'
             ? '같은 반이 됐어요!'
             : '요청을 보냈어요. 상대가 수락하면 같은 반이 돼요.'
@@ -323,7 +320,7 @@ export function SameClassApp() {
     } finally {
       setBusy(false)
     }
-  }, [groupId, requestMatch, selectedId])
+  }, [requestMatch, selectedId])
 
   if (wamDataError) {
     return (

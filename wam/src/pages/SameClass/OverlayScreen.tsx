@@ -25,7 +25,6 @@ const PART_LABELS: { key: keyof MatchCandidate['parts']; label: string }[] = [
   { key: 'sameRoom', label: '같은 강의실' },
   { key: 'sameBuilding', label: '같은 건물' },
   { key: 'free', label: '공강' },
-  { key: 'walk', label: '같은 방향 이동' },
 ]
 
 export function OverlayScreen({

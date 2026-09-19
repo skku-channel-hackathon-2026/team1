@@ -310,34 +310,54 @@ export class TutorialFunctions {
 
     const record = await requestMatch(db, channelId, memberId, input.targetId);
     const matchState = deriveMatchState(record, memberId, input.targetId);
-    const notified = input.groupId
-      ? await this.notifyGroup(
+    // Seeded freshmen have no manager account behind them, so there is nobody to DM.
+    const notified = isSeedMember(input.targetId)
+      ? false
+      : await this.notifyDirect(
           ctx,
-          input.groupId,
+          memberId,
+          input.targetId,
           matchState === "ACCEPTED"
-            ? `🎒 ${me.nickname}님과 ${target.nickname}님이 같은 반이 됐어요! 다음 수업에서 옆자리에 앉아보세요.`
-            : `🙋 ${me.nickname}님이 ${target.nickname}님에게 같은 반 요청을 보냈어요. /tutorial 에서 확인해보세요.`,
-        )
-      : false;
+            ? `🎒 ${me.nickname}님과 같은 반이 됐어요! 다음 수업에서 옆자리에 앉아봐요.`
+            : `🙋 ${me.nickname}님이 같은 반 요청을 보냈어요. /tutorial 에서 확인해보세요.`,
+        );
     return { targetId: input.targetId, matchState, notified };
   }
 
-  /** Post a notice to the group chat as the app bot. Never fails the caller. */
-  private async notifyGroup(
+  /**
+   * Send a 1:1 message from the caller to the other manager. Channel has no bot DM, so the
+   * message goes out as the caller (writeDirectChatMessageAsManager) into the direct chat
+   * between the two, created on first use. Never fails the caller.
+   */
+  private async notifyDirect(
     ctx: Context,
-    groupId: string,
+    fromManagerId: string,
+    toManagerId: string,
     plainText: string,
   ): Promise<boolean> {
     try {
-      const token = await this.tokenManager.getChannelToken({
-        channelId: ctx.channel.id,
-      });
+      const channelId = ctx.channel.id;
+      const token = await this.tokenManager.getChannelToken({ channelId });
+      const raw = this.nativeClient as unknown as {
+        callNativeFunctionWithToken<T>(
+          name: string,
+          params: unknown,
+          accessToken: string,
+        ): Promise<T>;
+      };
+      const { directChat } = await raw.callNativeFunctionWithToken<{
+        directChat: { id: string };
+      }>(
+        "findOrCreateDirectChat",
+        { channelId, managerIds: [fromManagerId, toManagerId] },
+        token.accessToken,
+      );
       const api = this.nativeClient.createProxyApi(token.accessToken);
-      await api.writeGroupMessage({
-        channelId: ctx.channel.id,
-        groupId,
+      await api.writeDirectChatMessageAsManager({
+        channelId,
+        directChatId: directChat.id,
         broadcast: false,
-        dto: { plainText, botName: "같은 반" },
+        dto: { plainText, managerId: fromManagerId },
       });
       return true;
     } catch {
