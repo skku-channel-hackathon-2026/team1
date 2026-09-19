@@ -15,7 +15,7 @@ function App() {
     <WamThemeProvider>
       <HeightSynchronizer maxHeight={480}>
         <WamHeader
-          title="Tutorial"
+          title="TEAM1 · Tutorial"
           onClose={close}
         />
         <div style={{ padding: isMobile() ? '0 16px 16px' : '0 24px 24px' }}>
