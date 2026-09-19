@@ -12,8 +12,11 @@ import {
   TUTORIAL_FUNCTIONS,
   isSeedMember,
   rankMatches,
+  type ChatMessage,
   type MatchCandidate,
   type MatchState,
+  type Notification,
+  type NotificationKind,
   type Profile,
 } from '@tutorial/shared'
 
@@ -30,6 +33,10 @@ interface MatchRecord {
 interface Store {
   profiles: Record<string, Profile>
   matches: Record<string, MatchRecord>
+  /** memberId → notifications, newest first (mirrors the D1 layout). */
+  notifications?: Record<string, Notification[]>
+  /** pair key → conversation, oldest first. */
+  chats?: Record<string, ChatMessage[]>
 }
 
 const query = new URLSearchParams(window.location.search)
@@ -54,6 +61,37 @@ function writeStore(store: Store) {
 function pairKey(a: string, b: string) {
   return [a, b].sort().join('|')
 }
+
+function newId() {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+}
+
+function pushNotification(
+  store: Store,
+  toId: string,
+  entry: {
+    kind: NotificationKind
+    fromId: string
+    fromNickname: string
+    text: string
+  }
+) {
+  if (isSeedMember(toId)) return
+  const all = store.notifications ?? (store.notifications = {})
+  const notification: Notification = {
+    id: newId(),
+    ...entry,
+    createdAt: new Date().toISOString(),
+    read: false,
+  }
+  all[toId] = [notification, ...(all[toId] ?? [])].slice(0, 50)
+}
+
+const SEED_REPLIES = [
+  '반가워요! 다음 수업 때 앞자리 쪽에 앉아 있을게요.',
+  '저도 그 시간 공강이에요. 같이 밥 먹어요!',
+  '좋아요, 강의실 앞에서 봐요 🙌',
+]
 
 function deriveState(
   record: MatchRecord | undefined,
@@ -150,16 +188,25 @@ async function callFunction<T>({ name, params }: CallFunctionArgs): Promise<T> {
       store.matches[key] = record
       writeStore(store)
       const matchState = deriveState(record, managerId, targetId)
-      if (isSeedMember(targetId)) return { targetId, matchState } as T
-      return {
-        targetId,
-        matchState,
-        notifyText:
+      pushNotification(store, targetId, {
+        kind: matchState === 'ACCEPTED' ? 'ACCEPTED' : 'REQUEST',
+        fromId: managerId,
+        fromNickname: me.nickname,
+        text:
           matchState === 'ACCEPTED'
-            ? `🎒 ${me.nickname}님과 같은 반이 됐어요!`
-            : `🙋 ${me.nickname}님이 같은 반 요청을 보냈어요.`,
-        directChatId: `local-dm:${[managerId, targetId].sort().join('|')}`,
-      } as T
+            ? `${me.nickname}님과 같은 반이 됐어요! 이제 대화할 수 있어요.`
+            : `${me.nickname}님이 같은 반 요청을 보냈어요.`,
+      })
+      if (matchState === 'ACCEPTED') {
+        pushNotification(store, managerId, {
+          kind: 'ACCEPTED',
+          fromId: targetId,
+          fromNickname: target.nickname,
+          text: `${target.nickname}님과 같은 반이 됐어요! 이제 대화할 수 있어요.`,
+        })
+      }
+      writeStore(store)
+      return { targetId, matchState } as T
     }
 
     case TUTORIAL_FUNCTIONS.cancelMatch: {
@@ -174,12 +221,88 @@ async function callFunction<T>({ name, params }: CallFunctionArgs): Promise<T> {
             : []
         if (remaining.length === 0) delete store.matches[key]
         else store.matches[key] = { ...existing, requestedBy: remaining }
+        if (store.chats) delete store.chats[key]
+        if (me) {
+          pushNotification(store, targetId, {
+            kind: 'CANCELLED',
+            fromId: managerId,
+            fromNickname: me.nickname,
+            text: `${me.nickname}님이 같은 반을 취소했어요.`,
+          })
+        }
         writeStore(store)
       }
       return {
         targetId,
         matchState: deriveState(store.matches[key], managerId, targetId),
       } as T
+    }
+
+    case TUTORIAL_FUNCTIONS.inbox: {
+      const mine = store.notifications?.[managerId] ?? []
+      const unreadByPeer: Record<string, number> = {}
+      for (const entry of mine) {
+        if (entry.read || entry.kind !== 'MESSAGE') continue
+        unreadByPeer[entry.fromId] = (unreadByPeer[entry.fromId] ?? 0) + 1
+      }
+      return {
+        notifications: mine,
+        unread: mine.filter((entry) => !entry.read).length,
+        unreadByPeer,
+      } as T
+    }
+
+    case TUTORIAL_FUNCTIONS.readChat: {
+      const targetId = String(params.targetId ?? '')
+      const key = pairKey(managerId, targetId)
+      if (deriveState(store.matches[key], managerId, targetId) !== 'ACCEPTED') {
+        throw new Error('You can only chat after both sides accept')
+      }
+      if (params.markRead !== false && store.notifications?.[managerId]) {
+        store.notifications[managerId] = store.notifications[managerId].map(
+          (entry) =>
+            entry.fromId === targetId ? { ...entry, read: true } : entry
+        )
+        writeStore(store)
+      }
+      return { targetId, messages: store.chats?.[key] ?? [] } as T
+    }
+
+    case TUTORIAL_FUNCTIONS.sendChat: {
+      const targetId = String(params.targetId ?? '')
+      const text = String(params.text ?? '').trim()
+      const key = pairKey(managerId, targetId)
+      if (deriveState(store.matches[key], managerId, targetId) !== 'ACCEPTED') {
+        throw new Error('You can only chat after both sides accept')
+      }
+      if (!text) throw new Error('Message is empty')
+      const chats = store.chats ?? (store.chats = {})
+      const log = [...(chats[key] ?? [])]
+      log.push({
+        id: newId(),
+        senderId: managerId,
+        text,
+        createdAt: new Date().toISOString(),
+      })
+      if (me) {
+        pushNotification(store, targetId, {
+          kind: 'MESSAGE',
+          fromId: managerId,
+          fromNickname: me.nickname,
+          text: text.slice(0, 80),
+        })
+      }
+      if (isSeedMember(targetId)) {
+        log.push({
+          id: newId(),
+          senderId: targetId,
+          text: SEED_REPLIES[Math.floor(log.length / 2) % SEED_REPLIES.length],
+          createdAt: new Date().toISOString(),
+        })
+      }
+      chats[key] = log.slice(-200)
+      writeStore(store)
+      return { targetId, messages: chats[key] } as T
     }
 
     default:
@@ -212,25 +335,9 @@ window.ChannelIOWam = {
     root.style.overflow = 'hidden'
   },
   callFunction,
-  callNativeFunction: async <T>({
-    name,
-    params,
-  }: {
-    name: string
-    params: Record<string, unknown>
-  }): Promise<T> => {
-    // Only the two DM functions are emulated; they log instead of sending.
-    if (name === TUTORIAL_FUNCTIONS.findOrCreateDirectChat) {
-      return { directChat: { id: 'local-dm' } } as T
-    }
-    if (name === TUTORIAL_FUNCTIONS.writeDirectChatMessageAsManager) {
-      const dto = params.dto as { plainText?: string } | undefined
-      console.info(
-        `[같은 반] (로컬) DM ${String(params.directChatId)} ← ${dto?.plainText ?? ''}`
-      )
-      return {} as T
-    }
-    throw new Error(`Native function ${name} is unavailable outside Desk`)
+  callNativeFunction: async <T>(): Promise<T> => {
+    // The app no longer calls any native function; chat lives in our own Functions.
+    throw new Error('Native functions are unavailable outside Desk')
   },
   close: () => window.alert('Desk에서는 창이 닫힙니다.'),
 }

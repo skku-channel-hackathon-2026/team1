@@ -1027,3 +1027,127 @@
   gap: 12px;
   min-height: 160px;
 }
+
+/* ---------- in-app chat & notifications ---------- */
+
+.sc-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--sc-hairline);
+  background: var(--sc-card);
+  color: var(--sc-ink);
+  font-size: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sc-bell:hover {
+  background: var(--sc-surface-soft);
+}
+
+.sc-bell__count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9999px;
+  background: var(--sc-primary);
+  color: var(--sc-on-primary);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.sc-modal--inbox {
+  width: min(520px, 100%);
+}
+
+.sc-notif {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--sc-hairline-soft);
+  border-radius: var(--sc-radius-sm);
+  background: var(--sc-card);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sc-notif:hover {
+  background: var(--sc-surface-soft);
+}
+
+.sc-notif--unread {
+  border-color: var(--sc-primary);
+  background: var(--sc-primary-tint);
+}
+
+.sc-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  min-height: 120px;
+  overflow-y: auto;
+  padding: 12px;
+  border-radius: var(--sc-radius-sm);
+  background: var(--sc-surface-soft);
+}
+
+.sc-chat__empty {
+  margin: auto;
+  font-size: 13px;
+  color: var(--sc-muted);
+  text-align: center;
+}
+
+.sc-bubble {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 78%;
+  align-self: flex-start;
+}
+
+.sc-bubble--mine {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.sc-bubble__text {
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--sc-card);
+  border: 1px solid var(--sc-hairline-soft);
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sc-bubble--mine .sc-bubble__text {
+  background: var(--sc-primary);
+  border-color: var(--sc-primary);
+  color: var(--sc-on-primary);
+}
+
+.sc-bubble__time {
+  font-size: 11px;
+  color: var(--sc-muted-soft);
+  flex-shrink: 0;
+}
+
+.sc-chat__form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}

@@ -84,7 +84,6 @@ const request = await call(
   "m1",
 );
 assert.equal(request.matchState, "ACCEPTED");
-assert.equal(request.notifyText, undefined); // seeds have no manager to DM
 const again = await call("tutorial.match", {}, "m1");
 assert.equal(again.results[0].matchState, "ACCEPTED");
 assert.ok(!("revealedInstances" in again.results[0]));
@@ -93,17 +92,63 @@ assert.ok(!("revealedInstances" in again.results[0]));
 await call("tutorial.saveProfile", { ...minji, nickname: "두번째" }, "m2");
 const fromTwo = await call("tutorial.requestMatch", { targetId: "m1" }, "m2");
 assert.equal(fromTwo.matchState, "REQUESTED");
-// A real manager target makes the server try to open the DM room; locally there is no channel
-// token, so it fails softly and names the step instead of swallowing the reason.
-assert.equal(fromTwo.directChatId, undefined);
-assert.match(fromTwo.notifyError, /token/);
-assert.match(fromTwo.notifyText, /같은 반 요청/);
+// The request lands in m1's in-app inbox — no Channel DM involved.
+const inboxOne = await call("tutorial.inbox", {}, "m1");
+// m1 already had an ACCEPTED notice from the seed match above, so the request is the newest.
+assert.equal(inboxOne.notifications[0].kind, "REQUEST");
+assert.equal(inboxOne.notifications[0].fromId, "m2");
+assert.equal(
+  inboxOne.unread,
+  inboxOne.notifications.filter((n) => !n.read).length,
+);
+assert.ok(inboxOne.unread >= 1);
 const seenByOne = await call("tutorial.match", {}, "m1");
 const two = seenByOne.results.find((r) => r.targetId === "m2");
 assert.equal(two.matchState, "RECEIVED");
 assert.equal(two.isSeed, false);
 const accept = await call("tutorial.requestMatch", { targetId: "m2" }, "m1");
 assert.equal(accept.matchState, "ACCEPTED");
+// Both sides learn about the match in their own inbox.
+for (const who of ["m1", "m2"]) {
+  const box = await call("tutorial.inbox", {}, who);
+  assert.ok(
+    box.notifications.some((n) => n.kind === "ACCEPTED"),
+    who,
+  );
+}
+
+// 4b. Chat opens only after both sides accept.
+await assert.rejects(
+  call("tutorial.sendChat", { targetId: "m1", text: "안녕" }, "m3"),
+  /Save your timetable|accept|400/,
+);
+const sent = await call(
+  "tutorial.sendChat",
+  { targetId: "m2", text: "안녕! 수요일 공강에 밥 먹을래?" },
+  "m1",
+);
+assert.equal(sent.messages.length, 1);
+assert.equal(sent.messages[0].senderId, "m1");
+const readByTwo = await call("tutorial.readChat", { targetId: "m1" }, "m2");
+assert.equal(readByTwo.messages.length, 1);
+assert.equal(readByTwo.messages[0].text, "안녕! 수요일 공강에 밥 먹을래?");
+// Reading the thread clears its unread badge.
+const afterRead = await call("tutorial.inbox", {}, "m2");
+assert.equal(afterRead.unreadByPeer.m1 ?? 0, 0);
+const replied = await call(
+  "tutorial.sendChat",
+  { targetId: "m1", text: "좋아! 학관 앞에서 봐" },
+  "m2",
+);
+assert.equal(replied.messages.length, 2);
+// A seeded freshman answers by itself so a solo demo still shows a conversation.
+const seedChat = await call(
+  "tutorial.sendChat",
+  { targetId: match.results[0].targetId, text: "안녕하세요!" },
+  "m1",
+);
+assert.equal(seedChat.messages.length, 2);
+assert.equal(seedChat.messages[1].senderId, match.results[0].targetId);
 
 // 5. Unknown targets and self-requests are rejected.
 for (const [targetId, who] of [
@@ -114,8 +159,13 @@ for (const [targetId, who] of [
 }
 
 // 6. Cancel: withdraw a request, decline a received one, dissolve a match.
+// Cancelling also closes the conversation.
 const c1 = await call("tutorial.cancelMatch", { targetId: "m2" }, "m1"); // was ACCEPTED
 assert.equal(c1.matchState, "NONE");
+await assert.rejects(
+  call("tutorial.readChat", { targetId: "m2" }, "m1"),
+  /accept/,
+);
 assert.equal(
   (await call("tutorial.match", {}, "m2")).results.find(
     (r) => r.targetId === "m1",
@@ -139,5 +189,5 @@ assert.ok(!afterDelete.results.some((r) => r.targetId === "m1"));
 await call("tutorial.deleteProfile", {}, "m2");
 
 console.log(
-  `PASS: 같은 반 profile upsert, seeded ranking (우주 first of 29, match in ${elapsed}ms), request/accept state, overlap-only after accept, DM room step reporting, cancel/decline/dissolve, delete`,
+  `PASS: 같은 반 profile upsert, seeded ranking (우주 first of 29, match in ${elapsed}ms), request/accept state, overlap-only after accept, in-app inbox + 1:1 chat, cancel/decline/dissolve, delete`,
 );

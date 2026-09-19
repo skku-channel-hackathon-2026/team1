@@ -19,9 +19,10 @@ export const TUTORIAL_FUNCTIONS = {
   match: "tutorial.match",
   requestMatch: "tutorial.requestMatch",
   cancelMatch: "tutorial.cancelMatch",
-  // Native functions the WAM calls through the manager's own Desk session (fallback DM path).
-  findOrCreateDirectChat: "findOrCreateDirectChat",
-  writeDirectChatMessageAsManager: "writeDirectChatMessageAsManager",
+  // In-app chat and notifications: no Channel DM permission needed.
+  inbox: "tutorial.inbox",
+  readChat: "tutorial.readChat",
+  sendChat: "tutorial.sendChat",
 } as const;
 
 export const CommandActionInputSchema = z.object({
@@ -211,12 +212,6 @@ export type RequestMatchInput = z.infer<typeof RequestMatchInputSchema>;
 export const RequestMatchOutputSchema = z.object({
   targetId: z.string(),
   matchState: MatchStateSchema,
-  /** Text for the DM the WAM sends as the current manager (absent for seeds). */
-  notifyText: z.string().optional(),
-  /** DM room between the two managers, opened server-side with the channel token. */
-  directChatId: z.string().optional(),
-  /** Why the server could not open the DM room, when it could not. */
-  notifyError: z.string().optional(),
 });
 
 export type RequestMatchOutput = z.infer<typeof RequestMatchOutputSchema>;
@@ -233,6 +228,78 @@ export const CancelMatchOutputSchema = z.object({
 });
 
 export type CancelMatchOutput = z.infer<typeof CancelMatchOutputSchema>;
+
+// ---------------------------------------------------------------------------
+// In-app notifications and 1:1 chat
+// ---------------------------------------------------------------------------
+
+export const NotificationKindSchema = z.enum([
+  "REQUEST", // someone asked to be my 같은 반
+  "ACCEPTED", // the other side accepted, we are now 같은 반
+  "CANCELLED", // a request was withdrawn / declined / a match dissolved
+  "MESSAGE", // a new chat message
+]);
+
+export type NotificationKind = z.infer<typeof NotificationKindSchema>;
+
+export const NotificationSchema = z.object({
+  id: z.string(),
+  kind: NotificationKindSchema,
+  /** The other person in this event. */
+  fromId: z.string(),
+  fromNickname: z.string(),
+  text: z.string(),
+  createdAt: z.string(),
+  read: z.boolean(),
+});
+
+export type Notification = z.infer<typeof NotificationSchema>;
+
+export const InboxOutputSchema = z.object({
+  notifications: z.array(NotificationSchema),
+  unread: z.number().int(),
+  /** Unread chat messages per counterpart, so the list can badge each card. */
+  unreadByPeer: z.record(z.number().int()),
+});
+
+export type InboxOutput = z.infer<typeof InboxOutputSchema>;
+
+export const ChatMessageSchema = z.object({
+  id: z.string(),
+  senderId: z.string(),
+  text: z.string(),
+  createdAt: z.string(),
+});
+
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+
+export const CHAT_TEXT_MAX = 500;
+
+export const ReadChatInputSchema = z.object({
+  targetId: z.string().min(1),
+  /** Mark this conversation's notifications read (default true). */
+  markRead: z.boolean().default(true),
+});
+
+export type ReadChatInput = z.infer<typeof ReadChatInputSchema>;
+
+export const ReadChatOutputSchema = z.object({
+  targetId: z.string(),
+  messages: z.array(ChatMessageSchema),
+});
+
+export type ReadChatOutput = z.infer<typeof ReadChatOutputSchema>;
+
+export const SendChatInputSchema = z.object({
+  targetId: z.string().min(1),
+  text: z.string().trim().min(1).max(CHAT_TEXT_MAX),
+});
+
+export type SendChatInput = z.infer<typeof SendChatInputSchema>;
+
+export const SendChatOutputSchema = ReadChatOutputSchema;
+
+export type SendChatOutput = z.infer<typeof SendChatOutputSchema>;
 
 export const EmptyInputSchema = z.object({});
 export const EmptyOutputSchema = z.object({});

@@ -4,10 +4,15 @@
 //   match:<channelId>:<memberA>|<memberB>   → MatchRecord (pair sorted, '|' never appears in ids)
 
 import {
+  ChatMessageSchema,
+  NotificationSchema,
   ProfileSchema,
   SEED_PROFILES,
   isSeedMember,
+  type ChatMessage,
   type MatchState,
+  type Notification,
+  type NotificationKind,
   type Profile,
 } from "@tutorial/shared";
 import { z } from "zod";
@@ -124,14 +129,20 @@ export async function deleteProfile(
     .prepare("DELETE FROM app_records WHERE id = ?")
     .bind(profileRecordId(channelId, memberId))
     .run();
-  // Removing the timetable also removes every match this member was part of.
+  // Removing the timetable also removes every match, chat and notification of this member.
   const records = await listMatchRecords(db, channelId, memberId);
   for (const record of records) {
     await db
       .prepare("DELETE FROM app_records WHERE id = ?")
       .bind(matchRecordId(channelId, record.pair[0], record.pair[1]))
       .run();
+    const other = record.pair.find((id) => id !== memberId) ?? memberId;
+    await deleteChat(db, channelId, memberId, other);
   }
+  await db
+    .prepare("DELETE FROM app_records WHERE id = ?")
+    .bind(notificationsRecordId(channelId, memberId))
+    .run();
 }
 
 /** Channel profiles merged with the seeded freshmen. A real record wins over a seed with the same id. */
@@ -211,4 +222,137 @@ export async function cancelMatch(
   };
   await writeJson(db, id, record);
   return record;
+}
+
+// ---------------------------------------------------------------------------
+// In-app notifications and 1:1 chat (still no new tables)
+//   notif:<channelId>:<memberId>   → Notification[] (newest first, capped)
+//   chat:<channelId>:<a>|<b>       → ChatMessage[]  (oldest first, capped)
+// ---------------------------------------------------------------------------
+
+const NotificationListSchema = z.array(NotificationSchema);
+const ChatLogSchema = z.array(ChatMessageSchema);
+
+/** Keep the JSON blobs small enough to read and write in one D1 round trip. */
+export const NOTIFICATION_LIMIT = 50;
+export const CHAT_LIMIT = 200;
+
+export function notificationsRecordId(
+  channelId: string,
+  memberId: string,
+): string {
+  return `notif:${channelId}:${memberId}`;
+}
+
+export function chatRecordId(channelId: string, a: string, b: string): string {
+  return `chat:${channelId}:${[a, b].sort().join("|")}`;
+}
+
+function newId(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export async function listNotifications(
+  db: AppDatabase,
+  channelId: string,
+  memberId: string,
+): Promise<Notification[]> {
+  return (
+    (await readJson(
+      db,
+      notificationsRecordId(channelId, memberId),
+      NotificationListSchema,
+    )) ?? []
+  );
+}
+
+/** Append a notification for `toMemberId`. Never throws at the caller. */
+export async function pushNotification(
+  db: AppDatabase,
+  channelId: string,
+  toMemberId: string,
+  entry: {
+    kind: NotificationKind;
+    fromId: string;
+    fromNickname: string;
+    text: string;
+  },
+): Promise<void> {
+  // Seeded freshmen have no inbox to read.
+  if (isSeedMember(toMemberId)) return;
+  const existing = await listNotifications(db, channelId, toMemberId);
+  const notification: Notification = {
+    id: newId(),
+    ...entry,
+    createdAt: new Date().toISOString(),
+    read: false,
+  };
+  await writeJson(
+    db,
+    notificationsRecordId(channelId, toMemberId),
+    [notification, ...existing].slice(0, NOTIFICATION_LIMIT),
+  );
+}
+
+/** Mark notifications read: all of them, or only those from one person. */
+export async function markNotificationsRead(
+  db: AppDatabase,
+  channelId: string,
+  memberId: string,
+  fromId?: string,
+): Promise<Notification[]> {
+  const existing = await listNotifications(db, channelId, memberId);
+  const updated = existing.map((notification) =>
+    !notification.read &&
+    (fromId === undefined || notification.fromId === fromId)
+      ? { ...notification, read: true }
+      : notification,
+  );
+  if (updated.some((n, index) => n.read !== existing[index].read)) {
+    await writeJson(db, notificationsRecordId(channelId, memberId), updated);
+  }
+  return updated;
+}
+
+export async function readChat(
+  db: AppDatabase,
+  channelId: string,
+  a: string,
+  b: string,
+): Promise<ChatMessage[]> {
+  return (
+    (await readJson(db, chatRecordId(channelId, a, b), ChatLogSchema)) ?? []
+  );
+}
+
+export async function appendChat(
+  db: AppDatabase,
+  channelId: string,
+  senderId: string,
+  targetId: string,
+  text: string,
+): Promise<ChatMessage[]> {
+  const existing = await readChat(db, channelId, senderId, targetId);
+  const message: ChatMessage = {
+    id: newId(),
+    senderId,
+    text,
+    createdAt: new Date().toISOString(),
+  };
+  const next = [...existing, message].slice(-CHAT_LIMIT);
+  await writeJson(db, chatRecordId(channelId, senderId, targetId), next);
+  return next;
+}
+
+/** Drop the conversation when a match is cancelled, so nothing lingers after a dissolve. */
+export async function deleteChat(
+  db: AppDatabase,
+  channelId: string,
+  a: string,
+  b: string,
+): Promise<void> {
+  await db
+    .prepare("DELETE FROM app_records WHERE id = ?")
+    .bind(chatRecordId(channelId, a, b))
+    .run();
 }

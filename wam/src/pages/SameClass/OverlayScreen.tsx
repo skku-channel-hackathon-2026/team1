@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import {
   DAYS,
   DAY_LABELS,
@@ -16,6 +17,8 @@ export interface OverlayScreenProps {
   requesting: boolean
   error: string | null
   notice: string | null
+  /** 1:1 chat panel, present only once both sides accepted. */
+  chat?: ReactNode
   onBack: () => void
   onRequest: () => void
   onCancel: () => void
@@ -33,6 +36,7 @@ export function OverlayScreen({
   requesting,
   error,
   notice,
+  chat,
   onBack,
   onRequest,
   onCancel,
@@ -177,6 +181,8 @@ export function OverlayScreen({
           </div>
         )}
       </section>
+
+      {chat}
 
       {notice && <p className="sc-notice">{notice}</p>}
       {error && <p className="sc-error">{error}</p>}

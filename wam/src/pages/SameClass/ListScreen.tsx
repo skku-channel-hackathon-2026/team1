@@ -10,6 +10,9 @@ export interface ListScreenProps {
   results: MatchCandidate[]
   poolSize: number
   loading: boolean
+  unread: number
+  unreadByPeer: Record<string, number>
+  onOpenInbox: () => void
   onSelect: (candidate: MatchCandidate) => void
   onEdit: () => void
   onRefresh: () => void
@@ -24,6 +27,9 @@ export function ListScreen({
   results,
   poolSize,
   loading,
+  unread,
+  unreadByPeer,
+  onOpenInbox,
   onSelect,
   onEdit,
   onRefresh,
@@ -73,7 +79,18 @@ export function ListScreen({
             />
             <h1 className="sc-title">당신과 같은 반이 될 수 있는 사람</h1>
           </div>
-          <Badge tone="primary">{filtered.length}명</Badge>
+          <div className="sc-row">
+            <Badge tone="primary">{filtered.length}명</Badge>
+            <button
+              type="button"
+              className="sc-bell"
+              aria-label={unread > 0 ? `알림 ${unread}개` : '알림'}
+              onClick={onOpenInbox}
+            >
+              🔔
+              {unread > 0 && <span className="sc-bell__count">{unread}</span>}
+            </button>
+          </div>
         </div>
         <p className="sc-body-sm">
           <span className="sc-strong">{me.nickname}</span> · {me.department} ·
@@ -163,6 +180,7 @@ export function ListScreen({
             key={candidate.targetId}
             me={me}
             candidate={candidate}
+            unread={unreadByPeer[candidate.targetId] ?? 0}
             rank={rankOf(candidate.targetId)}
             onClick={() => onSelect(candidate)}
           />
@@ -176,11 +194,13 @@ function CandidateCard({
   me,
   candidate,
   rank,
+  unread,
   onClick,
 }: {
   me: Profile
   candidate: MatchCandidate
   rank?: 1 | 2 | 3
+  unread: number
   onClick: () => void
 }) {
   const stateLabel = MATCH_STATE_LABELS[candidate.matchState]
@@ -215,6 +235,7 @@ function CandidateCard({
                 {stateLabel}
               </Badge>
             )}
+            {unread > 0 && <Badge tone="primary">새 메시지 {unread}</Badge>}
           </div>
           <div
             className="sc-stack"

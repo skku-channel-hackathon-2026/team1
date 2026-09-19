@@ -1,27 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  useCallFunction,
-  useNativeFunction,
-  useWamSize,
-} from '@channel.io/app-sdk-wam'
+import { useCallFunction, useWamSize } from '@channel.io/app-sdk-wam'
 import {
   CancelMatchOutputSchema,
   GetProfileOutputSchema,
+  InboxOutputSchema,
   MatchOutputSchema,
+  ReadChatOutputSchema,
   RequestMatchOutputSchema,
   SaveProfileOutputSchema,
   TUTORIAL_FUNCTIONS,
   type GetProfileOutput,
   type CancelMatchOutput,
+  type ChatMessage,
+  type InboxOutput,
   type MatchCandidate,
   type MatchOutput,
   type Profile,
+  type Notification,
   type ProfileInput,
+  type ReadChatOutput,
   type RequestMatchOutput,
   type SaveProfileOutput,
 } from '@tutorial/shared'
 
 import { useTutorialWamData } from '../../hooks/useTutorialWamData'
+import { ChatPanel } from './ChatPanel'
+import { InboxPanel } from './InboxPanel'
 import { InputScreen } from './InputScreen'
 import { ListScreen } from './ListScreen'
 import { OverlayScreen } from './OverlayScreen'
@@ -118,15 +122,6 @@ function readResult<T>(schema: ResultSchema<T>, raw: unknown, what: string): T {
   )
 }
 
-const DirectChatResultSchema: ResultSchema<{ directChat: { id: string } }> = {
-  safeParse(value: unknown) {
-    const chat = (value as { directChat?: { id?: unknown } } | null)?.directChat
-    return chat && typeof chat.id === 'string'
-      ? { success: true as const, data: { directChat: { id: chat.id } } }
-      : { success: false as const }
-  },
-}
-
 function describeError(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message)
     return `${fallback} (${error.message})`
@@ -149,6 +144,13 @@ export function SameClassApp() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unread, setUnread] = useState(0)
+  const [unreadByPeer, setUnreadByPeer] = useState<Record<string, number>>({})
+  const [inboxOpen, setInboxOpen] = useState(false)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [chatError, setChatError] = useState<string | null>(null)
+  const [chatBusy, setChatBusy] = useState(false)
 
   const getProfile = useCallFunction<GetProfileOutput>({
     appId,
@@ -174,13 +176,17 @@ export function SameClassApp() {
     appId,
     name: TUTORIAL_FUNCTIONS.cancelMatch,
   })
-  // Fallback DM path: the same native functions, but through this manager's own Desk session
-  // (the tutorial's "Send as a manager" button worked this way).
-  const findOrCreateDirectChat = useNativeFunction<{
-    directChat: { id: string }
-  }>({ name: TUTORIAL_FUNCTIONS.findOrCreateDirectChat })
-  const writeDirectMessage = useNativeFunction<unknown>({
-    name: TUTORIAL_FUNCTIONS.writeDirectChatMessageAsManager,
+  const inbox = useCallFunction<InboxOutput>({
+    appId,
+    name: TUTORIAL_FUNCTIONS.inbox,
+  })
+  const readChat = useCallFunction<ReadChatOutput>({
+    appId,
+    name: TUTORIAL_FUNCTIONS.readChat,
+  })
+  const sendChat = useCallFunction<ReadChatOutput>({
+    appId,
+    name: TUTORIAL_FUNCTIONS.sendChat,
   })
 
   // One size for every screen: re-requesting on each transition makes Desk jump.
@@ -317,6 +323,64 @@ export function SameClassApp() {
     [profile, saveProfile]
   )
 
+  const refreshInbox = useCallback(async () => {
+    try {
+      const output = readResult(InboxOutputSchema, await inbox.call({}), '알림')
+      setNotifications(output.notifications)
+      setUnread(output.unread)
+      setUnreadByPeer(output.unreadByPeer)
+    } catch {
+      // The inbox is ambient; a failed poll must not interrupt what the user is doing.
+    }
+  }, [inbox])
+
+  // Poll while the WAM is open: notifications every 15s, an open conversation every 5s.
+  useEffect(() => {
+    if (!appId || !managerId) return
+    void refreshInbox()
+    const timer = window.setInterval(() => void refreshInbox(), 15000)
+    return () => window.clearInterval(timer)
+  }, [appId, managerId, refreshInbox])
+
+  const loadChat = useCallback(
+    async (targetId: string) => {
+      try {
+        const output = readResult(
+          ReadChatOutputSchema,
+          await readChat.call({ targetId, markRead: true }),
+          '대화'
+        )
+        setMessages(output.messages)
+        setChatError(null)
+        void refreshInbox()
+      } catch (caught) {
+        setChatError(describeError(caught, '대화를 불러오지 못했어요.'))
+      }
+    },
+    [readChat, refreshInbox]
+  )
+
+  const handleSendChat = useCallback(
+    async (text: string) => {
+      if (!selectedId) return
+      setChatBusy(true)
+      setChatError(null)
+      try {
+        const output = readResult(
+          ReadChatOutputSchema,
+          await sendChat.call({ targetId: selectedId, text }),
+          '메시지'
+        )
+        setMessages(output.messages)
+      } catch (caught) {
+        setChatError(describeError(caught, '메시지를 보내지 못했어요.'))
+      } finally {
+        setChatBusy(false)
+      }
+    },
+    [selectedId, sendChat]
+  )
+
   const handleRequest = useCallback(async () => {
     if (!selectedId) return
     setBusy(true)
@@ -334,62 +398,19 @@ export function SameClassApp() {
             : candidate
         )
       )
-      const base =
-        output.matchState === 'ACCEPTED'
-          ? '같은 반이 됐어요!'
-          : '요청을 보냈어요. 상대가 수락하면 같은 반이 돼요.'
-      let notified = false
-      const problems: string[] = []
-      if (output.notifyError) problems.push(`서버: ${output.notifyError}`)
-      // Team Member permission → must run as the signed-in manager, i.e. from the WAM.
-      if (output.notifyText && channelId && managerId) {
-        try {
-          let directChatId = output.directChatId
-          if (!directChatId) {
-            const { directChat } = readResult(
-              DirectChatResultSchema,
-              await findOrCreateDirectChat.call({
-                channelId,
-                managerIds: [managerId, output.targetId],
-              }),
-              'DM 방'
-            )
-            directChatId = directChat.id
-          }
-          await writeDirectMessage.call({
-            channelId,
-            directChatId,
-            broadcast: false,
-            dto: { plainText: output.notifyText, managerId },
-          })
-          notified = true
-        } catch (caught) {
-          const message =
-            caught instanceof Error ? caught.message : String(caught)
-          problems.push(`Desk: ${message}`)
-          console.error('[같은 반] DM failed', caught)
-        }
-      }
       setNotice(
-        notified
-          ? `${base} 상대에게 다이렉트 메시지를 보냈어요.`
-          : output.notifyText
-            ? `${base} 다이렉트 메시지는 못 보냈어요. (${problems.join(' · ')})`
-            : base
+        output.matchState === 'ACCEPTED'
+          ? '같은 반이 됐어요! 이제 대화할 수 있어요.'
+          : '요청을 보냈어요. 상대가 수락하면 대화가 열려요.'
       )
+      if (output.matchState === 'ACCEPTED') await loadChat(output.targetId)
+      void refreshInbox()
     } catch (caught) {
       setError(describeError(caught, '요청을 보내지 못했어요.'))
     } finally {
       setBusy(false)
     }
-  }, [
-    channelId,
-    findOrCreateDirectChat,
-    managerId,
-    requestMatch,
-    selectedId,
-    writeDirectMessage,
-  ])
+  }, [loadChat, refreshInbox, requestMatch, selectedId])
 
   const handleCancel = useCallback(async () => {
     if (!selectedId) return
@@ -416,9 +437,11 @@ export function SameClassApp() {
             : candidate
         )
       )
+      setMessages([])
+      void refreshInbox()
       setNotice(
         current?.matchState === 'ACCEPTED'
-          ? '같은 반을 취소했어요.'
+          ? '같은 반을 취소했어요. 대화도 닫혔어요.'
           : current?.matchState === 'RECEIVED'
             ? '요청을 거절했어요.'
             : '보낸 요청을 취소했어요.'
@@ -428,7 +451,51 @@ export function SameClassApp() {
     } finally {
       setBusy(false)
     }
-  }, [cancelMatch, results, selectedId])
+  }, [cancelMatch, refreshInbox, results, selectedId])
+
+  // Refresh the open conversation while the detail screen is visible.
+  const chatOpen =
+    screen === 'OVERLAY' &&
+    !!selectedId &&
+    results.find((c) => c.targetId === selectedId)?.matchState === 'ACCEPTED'
+  useEffect(() => {
+    if (!chatOpen || !selectedId) return
+    const timer = window.setInterval(() => void loadChat(selectedId), 5000)
+    return () => window.clearInterval(timer)
+  }, [chatOpen, loadChat, selectedId])
+
+  const openFromNotification = useCallback(
+    (fromId: string) => {
+      setInboxOpen(false)
+      const candidate = results.find((entry) => entry.targetId === fromId)
+      if (!candidate) return
+      setSelectedId(fromId)
+      setError(null)
+      setNotice(null)
+      setMessages([])
+      setScreen('OVERLAY')
+      if (candidate.matchState === 'ACCEPTED') void loadChat(fromId)
+    },
+    [loadChat, results]
+  )
+
+  const markAllRead = useCallback(async () => {
+    setNotifications((previous) =>
+      previous.map((entry) => ({ ...entry, read: true }))
+    )
+    setUnread(0)
+    setUnreadByPeer({})
+    try {
+      // readChat with a peer marks that thread; the inbox call re-reads the real state.
+      await Promise.all(
+        [...new Set(notifications.map((entry) => entry.fromId))].map((fromId) =>
+          readChat.call({ targetId: fromId, markRead: true }).catch(() => null)
+        )
+      )
+    } finally {
+      void refreshInbox()
+    }
+  }, [notifications, readChat, refreshInbox])
 
   if (wamDataError) {
     return (
@@ -495,6 +562,18 @@ export function SameClassApp() {
           requesting={busy}
           error={error}
           notice={notice}
+          chat={
+            selected.matchState === 'ACCEPTED' && profile ? (
+              <ChatPanel
+                me={managerId}
+                peerNickname={selected.nickname}
+                messages={messages}
+                sending={chatBusy}
+                error={chatError}
+                onSend={(text) => void handleSendChat(text)}
+              />
+            ) : null
+          }
           onBack={() => {
             setError(null)
             setNotice(null)
@@ -512,6 +591,9 @@ export function SameClassApp() {
       {error && <p className="sc-error">{error}</p>}
       <ListScreen
         me={profile}
+        unread={unread}
+        unreadByPeer={unreadByPeer}
+        onOpenInbox={() => setInboxOpen(true)}
         results={results}
         poolSize={poolSize}
         loading={busy}
@@ -519,7 +601,12 @@ export function SameClassApp() {
           setSelectedId(candidate.targetId)
           setError(null)
           setNotice(null)
+          setMessages([])
+          setChatError(null)
           setScreen('OVERLAY')
+          if (candidate.matchState === 'ACCEPTED') {
+            void loadChat(candidate.targetId)
+          }
         }}
         onEdit={() => {
           setDraft(toInput(profile))
@@ -530,6 +617,14 @@ export function SameClassApp() {
         onDelete={() => void handleDelete()}
         onScopeChange={(value) => void handleScopeChange(value)}
       />
+      {inboxOpen && (
+        <InboxPanel
+          notifications={notifications}
+          onOpen={openFromNotification}
+          onMarkAllRead={() => void markAllRead()}
+          onClose={() => setInboxOpen(false)}
+        />
+      )}
     </div>
   )
 }

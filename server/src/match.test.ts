@@ -19,17 +19,34 @@ const me: Profile = {
   ...DEMO_PRESET,
 };
 
-test("free periods exist only between the first and last class of a day", () => {
+test("free periods span the day plus one period before and after class", () => {
   const grid = buildSlotGrid(me.instances);
-  // 수: 2교시, 4교시, 6교시 수업 → 3·5교시 공강, 1교시와 7교시 이후는 없음
+  // 수: 2·4·6교시 수업 → 1교시(직전)·3·5·7교시(직후) 공강, 8교시부터 없음
+  assert.equal(grid.WED[1].kind, "FREE");
   assert.equal(grid.WED[2].kind, "CLASS");
   assert.equal(grid.WED[3].kind, "FREE");
   assert.equal(grid.WED[5].kind, "FREE");
-  assert.equal(grid.WED[1].kind, "NONE");
-  assert.equal(grid.WED[7].kind, "NONE");
-  // 금: 3교시 하나만 → 공강 없음
-  assert.equal(grid.FRI[2].kind, "NONE");
-  assert.equal(grid.FRI[4].kind, "NONE");
+  assert.equal(grid.WED[7].kind, "FREE");
+  assert.equal(grid.WED[8].kind, "NONE");
+  // 금: 3교시 하나만 → 2교시와 4교시가 공강, 1교시와 5교시는 없음
+  assert.equal(grid.FRI[2].kind, "FREE");
+  assert.equal(grid.FRI[4].kind, "FREE");
+  assert.equal(grid.FRI[1].kind, "NONE");
+  assert.equal(grid.FRI[5].kind, "NONE");
+  // 1교시 수업이면 앞쪽 여유는 잘려 나간다 (0교시는 없다)
+  const early = buildSlotGrid([
+    {
+      subject: "x",
+      professor: "p",
+      day: "MON",
+      startPeriod: 1,
+      endPeriod: 1,
+      room: "22301",
+    },
+  ]);
+  assert.equal(early.MON[1].kind, "CLASS");
+  assert.equal(early.MON[2].kind, "FREE");
+  assert.equal(early.MON[3].kind, "NONE");
 });
 
 test("building keys group the codes that belong to one building", () => {
@@ -76,7 +93,7 @@ test("우주 ranks first and the Wednesday summary reads class → gap → class
   assert.ok(top.sharedFreeDays.includes("WED"));
   assert.equal(
     top.dailySummary.WED,
-    "2교시 같이 듣기 → 공강 1시간 → 4교시 같이 듣기 → 공강 1시간 → 6교시 같이 듣기",
+    "공강 1시간 → 2교시 같이 듣기 → 공강 1시간 → 4교시 같이 듣기 → 공강 1시간 → 6교시 같이 듣기 → 공강 1시간",
   );
   assert.equal(top.reasons[0], "같은 수업 5개");
   assert.ok(top.reasons.every((line) => !/점심|끝나고/.test(line)));
@@ -197,10 +214,10 @@ test("a gap between shared classes is just 공강, whatever sits around it", () 
     ["끝", 5, 5, "51101"],
   ]);
   const gap = scorePair(a, b);
-  assert.equal(gap.raw.breakdown.sharedFree, 0.15); // period 4 only
+  assert.equal(gap.raw.breakdown.sharedFree, 0.45); // periods 1, 4, 6
   assert.equal(
     gap.dailySummary.MON,
-    "2교시 같이 듣기 → 공강 1시간 → 5교시 같이 듣기",
+    "공강 1시간 → 2교시 같이 듣기 → 공강 1시간 → 5교시 같이 듣기 → 공강 1시간",
   );
 
   const c = mondayProfile("c", [
@@ -214,7 +231,7 @@ test("a gap between shared classes is just 공강, whatever sits around it", () 
   const adjacent = scorePair(c, d);
   assert.equal(
     adjacent.dailySummary.MON,
-    "2~3교시 같이 듣기 → 공강 1시간 → 5교시 같이 듣기",
+    "공강 1시간 → 2~3교시 같이 듣기 → 공강 1시간 → 5교시 같이 듣기 → 공강 1시간",
   );
   assert.equal(adjacent.score, 100, "identical timetables score 100");
 });

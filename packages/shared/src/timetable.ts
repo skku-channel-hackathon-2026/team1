@@ -118,10 +118,14 @@ export type SlotState =
 /** Day → period (1..MAX_PERIOD) → state. Index 0 is unused. */
 export type SlotGrid = Record<Day, SlotState[]>;
 
+/** Periods before the first class and after the last class that still count as 공강. */
+export const FREE_MARGIN = 1;
+
 /**
  * Expand instances to a week grid.
- * FREE = a period between the first and last class of that day with no class.
- * Before the first class and after the last class is NONE (the student is not on campus).
+ * FREE = an empty period between the first and last class of that day, plus one period
+ * right before the first class and one right after the last (people arrive early and linger
+ * after class, so that hour is when you can actually meet). Anything further out is NONE.
  */
 export function buildSlotGrid(instances: CourseInstance[]): SlotGrid {
   const grid = {} as SlotGrid;
@@ -137,8 +141,14 @@ export function buildSlotGrid(instances: CourseInstance[]): SlotGrid {
       }
     }
     if (todays.length > 0) {
-      const first = Math.min(...todays.map((i) => i.startPeriod));
-      const last = Math.max(...todays.map((i) => i.endPeriod));
+      const first = Math.max(
+        MIN_PERIOD,
+        Math.min(...todays.map((i) => i.startPeriod)) - FREE_MARGIN,
+      );
+      const last = Math.min(
+        MAX_PERIOD,
+        Math.max(...todays.map((i) => i.endPeriod)) + FREE_MARGIN,
+      );
       for (let p = first; p <= last; p++) {
         if (row[p].kind === "NONE") row[p] = { kind: "FREE" };
       }

@@ -7,13 +7,18 @@ import {
   EmptyInputSchema,
   EmptyOutputSchema,
   GetProfileOutputSchema,
+  InboxOutputSchema,
   MatchInputSchema,
   MatchOutputSchema,
   ProfileInputSchema,
+  ReadChatInputSchema,
+  ReadChatOutputSchema,
   RequestMatchInputSchema,
   RequestMatchOutputSchema,
   SaveProfileOutputSchema,
   SendAsBotInputSchema,
+  SendChatInputSchema,
+  SendChatOutputSchema,
   TUTORIAL_FUNCTIONS,
   TUTORIAL_WAM_NAME,
   isSeedMember,
@@ -22,14 +27,18 @@ import {
   type CancelMatchOutput,
   type CommandActionInput,
   type GetProfileOutput,
+  type InboxOutput,
   type MatchCandidate,
   type MatchOutput,
   type Profile,
   type ProfileInput,
+  type ReadChatInput,
+  type ReadChatOutput,
   type RequestMatchInput,
   type RequestMatchOutput,
   type SaveProfileOutput,
   type SendAsBotInput,
+  type SendChatInput,
   type TutorialWamArgs,
 } from "@tutorial/shared";
 import {
@@ -51,12 +60,18 @@ import {
 import { appId, appSecret } from "./config.js";
 import { getDatabase } from "./database.js";
 import {
+  appendChat,
   cancelMatch,
+  deleteChat,
   deleteProfile,
   deriveMatchState,
   getProfile,
   listMatchRecords,
+  listNotifications,
   listPool,
+  markNotificationsRead,
+  pushNotification,
+  readChat,
   requestMatch,
   saveProfile,
 } from "./same-class.store.js";
@@ -67,6 +82,17 @@ import {
 
 const tutorialMessage = "This is a test message sent by a manager.";
 const botMessage = "This is a test message sent by a bot.";
+
+// Demo-only: seeded freshmen answer so a solo presenter can show a real conversation.
+const SEED_REPLIES = [
+  "반가워요! 다음 수업 때 앞자리 쪽에 앉아 있을게요.",
+  "저도 그 시간 공강이에요. 같이 밥 먹어요!",
+  "좋아요, 강의실 앞에서 봐요 🙌",
+];
+
+function seedReply(_text: string, turn: number): string {
+  return SEED_REPLIES[Math.floor(turn / 2) % SEED_REPLIES.length];
+}
 
 @Extension({ name: "command", systemVersion: "v1" })
 export class CommandExtension {
@@ -315,25 +341,26 @@ export class TutorialFunctions {
 
     const record = await requestMatch(db, channelId, memberId, input.targetId);
     const matchState = deriveMatchState(record, memberId, input.targetId);
-    // Seeded freshmen have no manager account behind them, so there is nobody to DM.
-    if (isSeedMember(input.targetId)) {
-      return { targetId: input.targetId, matchState };
+    // The notification lives in this app's own inbox — no Channel DM permission involved.
+    await pushNotification(db, channelId, input.targetId, {
+      kind: matchState === "ACCEPTED" ? "ACCEPTED" : "REQUEST",
+      fromId: memberId,
+      fromNickname: me.nickname,
+      text:
+        matchState === "ACCEPTED"
+          ? `${me.nickname}님과 같은 반이 됐어요! 이제 대화할 수 있어요.`
+          : `${me.nickname}님이 같은 반 요청을 보냈어요.`,
+    });
+    // Accepting tells the requester too, so both inboxes show the match.
+    if (matchState === "ACCEPTED") {
+      await pushNotification(db, channelId, memberId, {
+        kind: "ACCEPTED",
+        fromId: input.targetId,
+        fromNickname: target.nickname,
+        text: `${target.nickname}님과 같은 반이 됐어요! 이제 대화할 수 있어요.`,
+      });
     }
-    const notifyText =
-      matchState === "ACCEPTED"
-        ? `🎒 ${me.nickname}님과 같은 반이 됐어요! 다음 수업에서 옆자리에 앉아봐요.`
-        : `🙋 ${me.nickname}님이 같은 반 요청을 보냈어요. /tutorial 에서 확인해보세요.`;
-    // Split like the tutorial: the server opens the DM room (a Channel permission, channel
-    // token), and the WAM writes the message as the signed-in manager (a Team Member
-    // permission, manager session) via writeDirectChatMessageAsManager.
-    const room = await this.openDirectChat(ctx, memberId, input.targetId);
-    return {
-      targetId: input.targetId,
-      matchState,
-      notifyText,
-      directChatId: room.ok ? room.directChatId : undefined,
-      notifyError: room.ok ? undefined : room.error,
-    };
+    return { targetId: input.targetId, matchState };
   }
 
   @Func(TUTORIAL_FUNCTIONS.cancelMatch)
@@ -345,55 +372,140 @@ export class TutorialFunctions {
     @Input() input: CancelMatchInput,
   ): Promise<CancelMatchOutput> {
     const memberId = requireManager(ctx);
-    const record = await cancelMatch(
+    const db = getDatabase();
+    const channelId = ctx.channel.id;
+    const before = await getProfile(db, channelId, memberId);
+    const record = await cancelMatch(db, channelId, memberId, input.targetId);
+    const matchState = deriveMatchState(record, memberId, input.targetId);
+    // Cancelling ends the conversation as well; nothing should survive a dissolve.
+    await deleteChat(db, channelId, memberId, input.targetId);
+    if (before) {
+      await pushNotification(db, channelId, input.targetId, {
+        kind: "CANCELLED",
+        fromId: memberId,
+        fromNickname: before.nickname,
+        text: `${before.nickname}님이 같은 반을 취소했어요.`,
+      });
+    }
+    return { targetId: input.targetId, matchState };
+  }
+
+  @Func(TUTORIAL_FUNCTIONS.inbox)
+  @Description("Read my in-app notifications and unread counts")
+  @InputSchema(EmptyInputSchema)
+  @OutputSchema(InboxOutputSchema)
+  async inbox(@Ctx() ctx: Context): Promise<InboxOutput> {
+    const memberId = requireManager(ctx);
+    const notifications = await listNotifications(
       getDatabase(),
       ctx.channel.id,
       memberId,
-      input.targetId,
     );
+    const unreadByPeer: Record<string, number> = {};
+    for (const notification of notifications) {
+      if (notification.read || notification.kind !== "MESSAGE") continue;
+      unreadByPeer[notification.fromId] =
+        (unreadByPeer[notification.fromId] ?? 0) + 1;
+    }
     return {
-      targetId: input.targetId,
-      matchState: deriveMatchState(record, memberId, input.targetId),
+      notifications,
+      unread: notifications.filter((entry) => !entry.read).length,
+      unreadByPeer,
     };
   }
 
-  /**
-   * Find or create the 1:1 room between two managers with the channel token.
-   * Tries the cached token, then a freshly issued one (the platform revokes tokens when the
-   * app's credentials or permissions change). Never fails the caller; reports the failing step.
-   */
-  private async openDirectChat(
-    ctx: Context,
-    fromManagerId: string,
-    toManagerId: string,
-  ): Promise<
-    { ok: true; directChatId: string } | { ok: false; error: string }
-  > {
+  @Func(TUTORIAL_FUNCTIONS.readChat)
+  @Description("Read the 1:1 conversation with a matched 같은 반")
+  @InputSchema(ReadChatInputSchema)
+  @OutputSchema(ReadChatOutputSchema)
+  async readChat(
+    @Ctx() ctx: Context,
+    @Input() input: ReadChatInput,
+  ): Promise<ReadChatOutput> {
+    const memberId = requireManager(ctx);
+    const db = getDatabase();
     const channelId = ctx.channel.id;
-    const failures: string[] = [];
-    for (const attempt of ["cached", "fresh"] as const) {
-      let step = `${attempt} token`;
-      try {
-        if (attempt === "fresh") {
-          await this.tokenManager.invalidateChannelToken(channelId);
-        }
-        const token = await this.tokenManager.getChannelToken({ channelId });
-        step = `${attempt} token → findOrCreateDirectChat`;
-        const { directChat } =
-          await this.nativeClient.callNativeFunctionWithToken(
-            "findOrCreateDirectChat",
-            { channelId, managerIds: [fromManagerId, toManagerId] },
-            token.accessToken,
-          );
-        return { ok: true, directChatId: directChat.id };
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : JSON.stringify(error);
-        console.error(`[같은 반] DM room failed at ${step}: ${message}`);
-        failures.push(`${step}: ${message.slice(0, 180)}`);
-        if (!/401|unauthenticated|credentials/i.test(message)) break;
+    await this.requireAcceptedMatch(db, channelId, memberId, input.targetId);
+    if (input.markRead) {
+      await markNotificationsRead(db, channelId, memberId, input.targetId);
+    }
+    return {
+      targetId: input.targetId,
+      messages: await readChat(db, channelId, memberId, input.targetId),
+    };
+  }
+
+  @Func(TUTORIAL_FUNCTIONS.sendChat)
+  @Description("Send a message in the 1:1 conversation with a matched 같은 반")
+  @InputSchema(SendChatInputSchema)
+  @OutputSchema(SendChatOutputSchema)
+  async sendChat(
+    @Ctx() ctx: Context,
+    @Input() input: SendChatInput,
+  ): Promise<ReadChatOutput> {
+    const memberId = requireManager(ctx);
+    const db = getDatabase();
+    const channelId = ctx.channel.id;
+    const me = await this.requireAcceptedMatch(
+      db,
+      channelId,
+      memberId,
+      input.targetId,
+    );
+    let messages = await appendChat(
+      db,
+      channelId,
+      memberId,
+      input.targetId,
+      input.text,
+    );
+    await pushNotification(db, channelId, input.targetId, {
+      kind: "MESSAGE",
+      fromId: memberId,
+      fromNickname: me.nickname,
+      text: input.text.slice(0, 80),
+    });
+    // Seeded freshmen are demo data; a short reply keeps the demo conversation alive.
+    if (isSeedMember(input.targetId)) {
+      const pool = await listPool(db, channelId);
+      const seed = pool.find((profile) => profile.memberId === input.targetId);
+      if (seed) {
+        messages = await appendChat(
+          db,
+          channelId,
+          input.targetId,
+          memberId,
+          seedReply(input.text, messages.length),
+        );
       }
     }
-    return { ok: false, error: failures.join(" | ").slice(0, 500) };
+    return { targetId: input.targetId, messages };
+  }
+
+  /** Chat is only open between two people who both accepted. Returns my profile. */
+  private async requireAcceptedMatch(
+    db: ReturnType<typeof getDatabase>,
+    channelId: string,
+    memberId: string,
+    targetId: string,
+  ): Promise<Profile> {
+    const me = await getProfile(db, channelId, memberId);
+    if (!me) {
+      throw new FunctionCallError(
+        "Save your timetable first",
+        FunctionCallErrorCode.BadRequest,
+        { type: "noProfile" },
+      );
+    }
+    const records = await listMatchRecords(db, channelId, memberId);
+    const record = records.find((entry) => entry.pair.includes(targetId));
+    if (deriveMatchState(record, memberId, targetId) !== "ACCEPTED") {
+      throw new FunctionCallError(
+        "You can only chat after both sides accept",
+        FunctionCallErrorCode.BadRequest,
+        { type: "notMatched" },
+      );
+    }
+    return me;
   }
 }
