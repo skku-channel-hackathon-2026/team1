@@ -27,9 +27,10 @@ import { useTutorialWamData } from '../../hooks/useTutorialWamData'
 import { ChatPanel } from './ChatPanel'
 import { InboxPanel } from './InboxPanel'
 import { InputScreen } from './InputScreen'
+import { SplashScreen } from './SplashScreen'
 import { ListScreen } from './ListScreen'
 import { OverlayScreen } from './OverlayScreen'
-import { Button, Spinner } from './ui'
+import { Button } from './ui'
 import './sameClass.css'
 
 type Screen = 'LOADING' | 'INPUT' | 'LIST' | 'OVERLAY'
@@ -53,6 +54,9 @@ function preferredSize(): { width: number; height: number } {
     height: clamp(availHeight * 0.7, MIN_SIZE.height, MAX_SIZE.height),
   }
 }
+
+/** Minimum time the opening screen stays up, so it reads as a beat instead of a flicker. */
+const SPLASH_MS = 1300
 
 const EMPTY_DRAFT: ProfileInput = {
   nickname: '',
@@ -148,6 +152,7 @@ export function SameClassApp() {
   const [unread, setUnread] = useState(0)
   const [unreadByPeer, setUnreadByPeer] = useState<Record<string, number>>({})
   const [inboxOpen, setInboxOpen] = useState(false)
+  const [splashDone, setSplashDone] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatError, setChatError] = useState<string | null>(null)
   const [chatBusy, setChatBusy] = useState(false)
@@ -323,24 +328,56 @@ export function SameClassApp() {
     [profile, saveProfile]
   )
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSplashDone(true), SPLASH_MS)
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  // Newest notification id seen by the poller; a change means something happened elsewhere.
+  const lastNotificationId = useRef<string | null>(null)
+
   const refreshInbox = useCallback(async () => {
     try {
       const output = readResult(InboxOutputSchema, await inbox.call({}), '알림')
       setNotifications(output.notifications)
       setUnread(output.unread)
       setUnreadByPeer(output.unreadByPeer)
+      const newest = output.notifications[0]?.id ?? null
+      const changed = newest !== lastNotificationId.current
+      lastNotificationId.current = newest
+      return changed
     } catch {
       // The inbox is ambient; a failed poll must not interrupt what the user is doing.
+      return false
     }
   }, [inbox])
 
-  // Poll while the WAM is open: notifications every 15s, an open conversation every 5s.
+  // Keep the latest callbacks in a ref so the poll interval is created once, not per render.
+  const pollRef = useRef({ refreshInbox, runMatch })
+  pollRef.current = { refreshInbox, runMatch }
+
+  // Poll while the WAM is open. A new notification means a match state may have changed on the
+  // other side (they accepted, declined or cancelled), so re-read the candidate list too — that
+  // is what turns "수락 대기 중" into "같은 반" without the user pressing 새로고침. Every fifth
+  // tick refreshes anyway, in case a notification was missed.
   useEffect(() => {
     if (!appId || !managerId) return
-    void refreshInbox()
-    const timer = window.setInterval(() => void refreshInbox(), 15000)
+    let ticks = 0
+    const poll = async () => {
+      const changed = await pollRef.current.refreshInbox()
+      ticks += 1
+      if (changed || ticks % 5 === 0) {
+        try {
+          await pollRef.current.runMatch()
+        } catch {
+          // A failed background refresh must not disturb the screen.
+        }
+      }
+    }
+    void poll()
+    const timer = window.setInterval(() => void poll(), 6000)
     return () => window.clearInterval(timer)
-  }, [appId, managerId, refreshInbox])
+  }, [appId, managerId])
 
   const loadChat = useCallback(
     async (targetId: string) => {
@@ -458,11 +495,18 @@ export function SameClassApp() {
     screen === 'OVERLAY' &&
     !!selectedId &&
     results.find((c) => c.targetId === selectedId)?.matchState === 'ACCEPTED'
+  const chatRef = useRef(loadChat)
+  chatRef.current = loadChat
   useEffect(() => {
     if (!chatOpen || !selectedId) return
-    const timer = window.setInterval(() => void loadChat(selectedId), 5000)
+    // Fires right away so a match accepted during polling shows its conversation at once.
+    void chatRef.current(selectedId)
+    const timer = window.setInterval(
+      () => void chatRef.current(selectedId),
+      5000
+    )
     return () => window.clearInterval(timer)
-  }, [chatOpen, loadChat, selectedId])
+  }, [chatOpen, selectedId])
 
   const openFromNotification = useCallback(
     (fromId: string) => {
@@ -507,17 +551,18 @@ export function SameClassApp() {
     )
   }
 
-  if (screen === 'LOADING') {
+  // Stay on the opening screen until the boot call finishes *and* the beat has elapsed.
+  if (screen === 'LOADING' || !splashDone) {
     return (
       <div className="sc-root">
-        <Spinner text="같은 반을 찾을 준비를 하고 있어요…" />
+        <SplashScreen />
       </div>
     )
   }
 
   if (screen === 'INPUT') {
     return (
-      <div className="sc-root">
+      <div className="sc-root sc-enter">
         <InputScreen
           draft={draft}
           onChange={handleDraftChange}
@@ -587,7 +632,7 @@ export function SameClassApp() {
   }
 
   return (
-    <div className="sc-root">
+    <div className="sc-root sc-enter">
       {error && <p className="sc-error">{error}</p>}
       <ListScreen
         me={profile}

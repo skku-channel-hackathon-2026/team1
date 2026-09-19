@@ -1151,3 +1151,121 @@
   grid-template-columns: 1fr auto;
   gap: 8px;
 }
+
+/* ---------- opening screen ---------- */
+
+.sc-splash {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 100%;
+  min-height: 320px;
+  padding: 24px;
+  text-align: center;
+}
+
+.sc-splash__icon {
+  width: 96px;
+  height: 96px;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: var(--sc-shadow);
+  animation: sc-splash-pop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+.sc-splash__title {
+  margin: 8px 0 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  color: var(--sc-ink);
+  animation: sc-splash-rise 0.45s ease-out 0.16s both;
+}
+
+.sc-splash__tagline {
+  margin: 0;
+  font-size: 15px;
+  color: var(--sc-muted);
+  animation: sc-splash-rise 0.45s ease-out 0.26s both;
+}
+
+.sc-splash__bar {
+  width: 120px;
+  height: 3px;
+  margin-top: 14px;
+  border-radius: 9999px;
+  background: var(--sc-surface-strong);
+  overflow: hidden;
+  animation: sc-splash-rise 0.45s ease-out 0.36s both;
+}
+
+.sc-splash__bar span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--sc-primary);
+  animation: sc-splash-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes sc-splash-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sc-splash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sc-splash-slide {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
+}
+
+/* The first frame after the splash fades in rather than snapping into place. */
+.sc-enter {
+  animation: sc-fade-in 0.3s ease-out both;
+}
+
+@keyframes sc-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-splash__icon,
+  .sc-splash__title,
+  .sc-splash__tagline,
+  .sc-splash__bar,
+  .sc-enter {
+    animation: none;
+  }
+
+  .sc-splash__bar span {
+    width: 100%;
+    animation: none;
+  }
+}

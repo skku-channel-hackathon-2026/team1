@@ -149,16 +149,3 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
     />
   )
 }
-
-export function Spinner({ text }: { text?: string }) {
-  return (
-    <div className="sc-center">
-      <div
-        className="sc-spinner"
-        role="status"
-        aria-label="불러오는 중"
-      />
-      {text && <p className="sc-caption">{text}</p>}
-    </div>
-  )
-}
