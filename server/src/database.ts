@@ -6,8 +6,10 @@ export interface AppDatabase {
     bind(...values: (string | number | null)[]): {
       run(): Promise<unknown>;
       first<T = Record<string, unknown>>(): Promise<T | null>;
+      all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
     };
     first<T = Record<string, unknown>>(): Promise<T | null>;
+    all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
   };
 }
 const databaseContext = new AsyncLocalStorage<AppDatabase>();

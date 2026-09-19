@@ -14,7 +14,7 @@
       rel="stylesheet"
       href="https://cf.channel.io/asset/font/Inter/inter.css"
     />
-    <title>Tutorial</title>
+    <title>같은 반</title>
   </head>
   <body>
     <div id="root"></div>
@@ -23,7 +23,10 @@
       src="/src/main.tsx"
     ></script>
     <script>
-      var appearance = ChannelIOWam.getWamData('appearance')
+      var appearance =
+        typeof ChannelIOWam !== 'undefined'
+          ? ChannelIOWam.getWamData('appearance')
+          : 'light'
       if (appearance === 'dark') {
         document.body.style.backgroundColor = '#464748'
       } else {

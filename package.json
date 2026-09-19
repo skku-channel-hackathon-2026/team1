@@ -22,7 +22,8 @@
     "build:cloudflare": "pnpm build && node scripts/build-cloudflare.mjs",
     "dev:cloudflare": "wrangler dev --local",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
-    "test:cloudflare": "node scripts/smoke-cloudflare.mjs"
+    "test:cloudflare": "node scripts/smoke-cloudflare.mjs",
+    "test:same-class": "node scripts/smoke-same-class.mjs"
   },
   "devDependencies": {
     "prettier": "^3.2.5",

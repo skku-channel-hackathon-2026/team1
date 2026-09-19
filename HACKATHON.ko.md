@@ -12,7 +12,7 @@ Node.js 24와 pnpm 11.24.0을 사용합니다. `pnpm-lock.yaml`을 함께 커밋
 | 권한                  | 할 수 있는 일                            |
 | --------------------- | ---------------------------------------- |
 | 팀 GitHub 레포 Admin  | 코드·SQL 수정, 브랜치·PR 생성, main push |
-| 채널톡 앱 owner 권한   | 앱 설정·익스텐션·권한 확인 및 개발       |
+| 채널톡 앱 owner 권한  | 앱 설정·익스텐션·권한 확인 및 개발       |
 | 공통 해커톤 채널 멤버 | 설치된 앱 실행과 팀 테스트               |
 
 Cloudflare 계정 권한 없이도 코드 배포가 가능합니다. 원격 DB 마이그레이션, 서버 비밀 키 변경,
@@ -33,15 +33,18 @@ team1 리소스:
 
 ## 코드 구조
 
-| 위치                               | 용도                           |
-| ---------------------------------- | ------------------------------ |
-| `server/src/tutorial.functions.ts` | Function·커맨드 구현           |
-| `wam/src/pages/Send/Send.tsx`      | WAM 화면                       |
-| `packages/shared/src/index.ts`     | 공유 타입·Zod 입력/출력 스키마 |
-| `server/src/database.ts`           | 현재 요청의 D1 접근            |
-| `cloudflare/migrations/`           | 버전별 DB 스키마 변경 SQL      |
-| `cloudflare/worker.mjs`            | Workers HTTP 진입점            |
-| `wrangler.jsonc`                   | 로컬 실행과 팀 DB 바인딩       |
+| 위치                               | 용도                                                      |
+| ---------------------------------- | --------------------------------------------------------- |
+| `server/src/tutorial.functions.ts` | Function·커맨드 구현 (「같은 반」 Function 포함)          |
+| `server/src/same-class.store.ts`   | 「같은 반」 프로필·매칭 상태 D1 저장 (`app_records` JSON) |
+| `packages/shared/src/match.ts`     | 「같은 반」 유사도 알고리즘 (순수 함수, 단위 테스트)      |
+| `packages/shared/src/seed.ts`      | 「같은 반」 시드 새내기 30명 + 민지 프리셋                |
+| `wam/src/pages/SameClass/`         | WAM 화면 3개 (입력 → 추천 → 겹쳐진 시간표)                |
+| `packages/shared/src/index.ts`     | 공유 타입·Zod 입력/출력 스키마                            |
+| `server/src/database.ts`           | 현재 요청의 D1 접근                                       |
+| `cloudflare/migrations/`           | 버전별 DB 스키마 변경 SQL                                 |
+| `cloudflare/worker.mjs`            | Workers HTTP 진입점                                       |
+| `wrangler.jsonc`                   | 로컬 실행과 팀 DB 바인딩                                  |
 
 ## 로컬에서 서버와 DB 실행
 
@@ -67,8 +70,20 @@ corepack pnpm dev:cloudflare
 
 출력된 localhost 주소에서 `/api/health`, `/api/ready`를 확인합니다.
 화면을 수정한 뒤에는 `corepack pnpm build:cloudflare`로 WAM 정적 파일도 다시 빌드합니다.
-UI만 빠르게 개발할 때는 `corepack pnpm dev:wam`을 사용할 수 있지만,
-단독 브라우저에는 Desk의 WAM 컨텍스트가 없으므로 실제 연결 검증은 공통 해커톤 채널에서 해야 합니다.
+UI만 빠르게 개발할 때는 `corepack pnpm dev:wam`을 사용합니다. 단독 브라우저에는 Desk의 WAM 컨텍스트가
+없으므로 「같은 반」은 개발 모드에서만 `wam/src/local/mockHost.ts`를 붙여 화면 전체를 브라우저에서 돌립니다
+(저장소는 localStorage). 서명·D1·권한을 포함한 실제 연결 검증은 공통 해커톤 채널에서 해야 합니다.
+
+Windows에서 `pnpm`을 전역 설치하지 않았다면 `corepack pnpm build:cloudflare`처럼 다른 스크립트를 다시
+호출하는 명령이 `'pnpm'은(는) 내부 또는 외부 명령...`으로 실패합니다. 바깥쪽만 corepack을 거치고 안쪽
+`pnpm`은 PATH에서 찾지 못하기 때문입니다. 각 단계를 `corepack pnpm`으로 직접 실행하거나
+`corepack enable`로 shim을 PATH에 올리세요.
+
+```sh
+# 예: corepack pnpm dev:wam 대신
+corepack pnpm --filter @tutorial/shared build
+corepack pnpm --filter @tutorial/wam dev
+```
 
 기존 `dev:server`는 Node 서버만 실행하며 D1을 제공하지 않습니다. DB 사용 기능은 Wrangler에서
 실행하세요. 별도 개발 앱을 로컬 HTTPS 터널과 연결할 때는 운영진과 Endpoint를 조율합니다.
@@ -107,6 +122,9 @@ UI만 빠르게 개발할 때는 `corepack pnpm dev:wam`을 사용할 수 있지
 5. 운영진의 원격 적용 완료를 확인한 뒤 의존 코드를 main에 합칩니다.
 
 원격 적용은 자동 배포에 포함되지 않습니다. 운영진은 해당 팀 레포와 DB ID를 확인한 뒤 실행합니다.
+
+「같은 반」 앱은 새 마이그레이션 없이 기존 `app_records`에 JSON으로 저장합니다. 제품 설명과 데이터 키는
+[docs/same-class.md](docs/same-class.md)를 참고하세요.
 
 ```sh
 # 운영진 전용: 현재 설정이 해당 팀 DB를 가리키는지 먼저 확인

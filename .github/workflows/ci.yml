@@ -41,3 +41,4 @@ jobs:
             sleep 1
           done
           pnpm test:cloudflare || { cat /tmp/wrangler-smoke.log; exit 1; }
+          pnpm test:same-class || { cat /tmp/wrangler-smoke.log; exit 1; }

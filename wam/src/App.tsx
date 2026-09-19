@@ -1,27 +1,31 @@
-import {
-  HeightSynchronizer,
-  WamHeader,
-  WamThemeProvider,
-} from '@channel.io/app-sdk-wam-ui'
-import { useWamClose } from '@channel.io/app-sdk-wam'
+import { WamHeader, WamThemeProvider } from '@channel.io/app-sdk-wam-ui'
+import { useWamClose, useWamData } from '@channel.io/app-sdk-wam'
 
-import { isMobile } from './utils/userAgent'
-import Send from './pages/Send'
+import SameClass from './pages/SameClass'
 
 function App() {
   const { close } = useWamClose()
+  const dark = useWamData('appearance') === 'dark'
 
   return (
     <WamThemeProvider>
-      <HeightSynchronizer maxHeight={480}>
+      <div
+        className={dark ? 'sc sc--dark' : 'sc'}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
+          boxSizing: 'border-box',
+        }}
+      >
         <WamHeader
-          title="Tutorial"
+          title="같은 반"
           onClose={close}
         />
-        <div style={{ padding: isMobile() ? '0 16px 16px' : '0 24px 24px' }}>
-          <Send />
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <SameClass />
         </div>
-      </HeightSynchronizer>
+      </div>
     </WamThemeProvider>
   )
 }
