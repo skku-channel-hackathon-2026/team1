@@ -317,24 +317,22 @@ export class TutorialFunctions {
     const matchState = deriveMatchState(record, memberId, input.targetId);
     // Seeded freshmen have no manager account behind them, so there is nobody to DM.
     if (isSeedMember(input.targetId)) {
-      return { targetId: input.targetId, matchState, notified: false };
+      return { targetId: input.targetId, matchState };
     }
     const notifyText =
       matchState === "ACCEPTED"
         ? `🎒 ${me.nickname}님과 같은 반이 됐어요! 다음 수업에서 옆자리에 앉아봐요.`
         : `🙋 ${me.nickname}님이 같은 반 요청을 보냈어요. /tutorial 에서 확인해보세요.`;
-    const outcome = await this.notifyDirect(
-      ctx,
-      memberId,
-      input.targetId,
-      notifyText,
-    );
+    // Split like the tutorial: the server opens the DM room (a Channel permission, channel
+    // token), and the WAM writes the message as the signed-in manager (a Team Member
+    // permission, manager session) via writeDirectChatMessageAsManager.
+    const room = await this.openDirectChat(ctx, memberId, input.targetId);
     return {
       targetId: input.targetId,
       matchState,
-      notified: outcome.ok,
-      notifyError: outcome.ok ? undefined : outcome.error,
       notifyText,
+      directChatId: room.ok ? room.directChatId : undefined,
+      notifyError: room.ok ? undefined : room.error,
     };
   }
 
@@ -360,76 +358,39 @@ export class TutorialFunctions {
   }
 
   /**
-   * Send a 1:1 message from the caller to the other manager. Channel has no bot DM, so the
-   * message goes out as the caller (writeDirectChatMessageAsManager) into the direct chat
-   * between the two, created on first use. Never fails the caller.
+   * Find or create the 1:1 room between two managers with the channel token.
+   * Tries the cached token, then a freshly issued one (the platform revokes tokens when the
+   * app's credentials or permissions change). Never fails the caller; reports the failing step.
    */
-  private async notifyDirect(
+  private async openDirectChat(
     ctx: Context,
     fromManagerId: string,
     toManagerId: string,
-    plainText: string,
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
+  ): Promise<
+    { ok: true; directChatId: string } | { ok: false; error: string }
+  > {
     const channelId = ctx.channel.id;
-
-    // Both calls are typed against the SDK's NativeFunctionTypeMap, so a misspelled or
-    // unsupported function name fails at compile time rather than at runtime.
-    const send = async (accessToken: string) => {
-      const { directChat } =
-        await this.nativeClient.callNativeFunctionWithToken(
-          "findOrCreateDirectChat",
-          { channelId, managerIds: [fromManagerId, toManagerId] },
-          accessToken,
-        );
-      await this.nativeClient.callNativeFunctionWithToken(
-        "writeDirectChatMessageAsManager",
-        {
-          channelId,
-          directChatId: directChat.id,
-          broadcast: false,
-          dto: { plainText, managerId: fromManagerId },
-        },
-        accessToken,
-      );
-    };
-
-    // The platform's "credentials have changed" 401 fits a cached token that no longer matches
-    // the app's current settings, so the retry ladder is: cached channel token → freshly issued
-    // channel token → app token. Each attempt's failure is kept so the WAM can show all of them.
-    const attempts: { label: string; token: () => Promise<string> }[] = [
-      {
-        label: "channel token",
-        token: async () =>
-          (await this.tokenManager.getChannelToken({ channelId })).accessToken,
-      },
-      {
-        label: "fresh channel token",
-        token: async () => {
-          await this.tokenManager.invalidateChannelToken(channelId);
-          return (await this.tokenManager.getChannelToken({ channelId }))
-            .accessToken;
-        },
-      },
-      {
-        label: "app token",
-        token: async () => {
-          await this.tokenManager.invalidateAppToken();
-          return (await this.tokenManager.getAppToken()).accessToken;
-        },
-      },
-    ];
-
     const failures: string[] = [];
-    for (const attempt of attempts) {
+    for (const attempt of ["cached", "fresh"] as const) {
+      let step = `${attempt} token`;
       try {
-        await send(await attempt.token());
-        return { ok: true };
+        if (attempt === "fresh") {
+          await this.tokenManager.invalidateChannelToken(channelId);
+        }
+        const token = await this.tokenManager.getChannelToken({ channelId });
+        step = `${attempt} token → findOrCreateDirectChat`;
+        const { directChat } =
+          await this.nativeClient.callNativeFunctionWithToken(
+            "findOrCreateDirectChat",
+            { channelId, managerIds: [fromManagerId, toManagerId] },
+            token.accessToken,
+          );
+        return { ok: true, directChatId: directChat.id };
       } catch (error) {
         const message =
           error instanceof Error ? error.message : JSON.stringify(error);
-        console.error(`[같은 반] DM failed with ${attempt.label}: ${message}`);
-        failures.push(`${attempt.label}: ${message.slice(0, 160)}`);
-        // Only an auth failure is worth retrying with a different token.
+        console.error(`[같은 반] DM room failed at ${step}: ${message}`);
+        failures.push(`${step}: ${message.slice(0, 180)}`);
         if (!/401|unauthenticated|credentials/i.test(message)) break;
       }
     }

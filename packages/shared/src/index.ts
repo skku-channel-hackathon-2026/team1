@@ -211,12 +211,12 @@ export type RequestMatchInput = z.infer<typeof RequestMatchInputSchema>;
 export const RequestMatchOutputSchema = z.object({
   targetId: z.string(),
   matchState: MatchStateSchema,
-  /** Whether a direct message reached the other manager (best effort; false for seeds or on failure). */
-  notified: z.boolean(),
-  /** Why the server-side DM failed, when it did — surfaced so permission problems are visible. */
-  notifyError: z.string().optional(),
-  /** Text the WAM can resend itself through the manager's own session if the server could not. */
+  /** Text for the DM the WAM sends as the current manager (absent for seeds). */
   notifyText: z.string().optional(),
+  /** DM room between the two managers, opened server-side with the channel token. */
+  directChatId: z.string().optional(),
+  /** Why the server could not open the DM room, when it could not. */
+  notifyError: z.string().optional(),
 });
 
 export type RequestMatchOutput = z.infer<typeof RequestMatchOutputSchema>;

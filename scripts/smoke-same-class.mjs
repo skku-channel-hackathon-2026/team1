@@ -164,7 +164,7 @@ const request = await call(
   "m1",
 );
 assert.equal(request.matchState, "ACCEPTED");
-assert.equal(request.notified, false); // seeds have no manager to DM
+assert.equal(request.notifyText, undefined); // seeds have no manager to DM
 const again = await call("tutorial.match", {}, "m1");
 assert.equal(again.results[0].matchState, "ACCEPTED");
 assert.ok(!("revealedInstances" in again.results[0]));
@@ -173,11 +173,10 @@ assert.ok(!("revealedInstances" in again.results[0]));
 await call("tutorial.saveProfile", { ...minji, nickname: "두번째" }, "m2");
 const fromTwo = await call("tutorial.requestMatch", { targetId: "m1" }, "m2");
 assert.equal(fromTwo.matchState, "REQUESTED");
-// A real manager target triggers the DM path; locally there is no channel token, so it fails softly
-// and the reason is reported instead of swallowed.
-assert.equal(fromTwo.notified, false);
-assert.equal(typeof fromTwo.notifyError, "string");
-assert.ok(fromTwo.notifyError.length > 0);
+// A real manager target makes the server try to open the DM room; locally there is no channel
+// token, so it fails softly and names the step instead of swallowing the reason.
+assert.equal(fromTwo.directChatId, undefined);
+assert.match(fromTwo.notifyError, /token/);
 assert.match(fromTwo.notifyText, /같은 반 요청/);
 const seenByOne = await call("tutorial.match", {}, "m1");
 const two = seenByOne.results.find((r) => r.targetId === "m2");
@@ -220,5 +219,5 @@ assert.ok(!afterDelete.results.some((r) => r.targetId === "m1"));
 await call("tutorial.deleteProfile", {}, "m2");
 
 console.log(
-  `PASS: 같은 반 profile upsert, seeded ranking (하늘 first of 29, match in ${elapsed}ms), request/accept state, overlap-only after accept, DM notice flag, campus hard filter, cancel/decline/dissolve, delete`,
+  `PASS: 같은 반 profile upsert, seeded ranking (하늘 first of 29, match in ${elapsed}ms), request/accept state, overlap-only after accept, DM room step reporting, campus hard filter, cancel/decline/dissolve, delete`,
 );

@@ -150,16 +150,16 @@ async function callFunction<T>({ name, params }: CallFunctionArgs): Promise<T> {
       store.matches[key] = record
       writeStore(store)
       const matchState = deriveState(record, managerId, targetId)
-      const notified = !isSeedMember(targetId)
-      if (notified) {
-        console.info(
-          `[같은 반] (로컬) ${target.nickname}에게 DM: ` +
-            (matchState === 'ACCEPTED'
-              ? `${me.nickname}님과 같은 반이 됐어요!`
-              : `${me.nickname}님이 같은 반 요청을 보냈어요.`)
-        )
-      }
-      return { targetId, matchState, notified } as T
+      if (isSeedMember(targetId)) return { targetId, matchState } as T
+      return {
+        targetId,
+        matchState,
+        notifyText:
+          matchState === 'ACCEPTED'
+            ? `🎒 ${me.nickname}님과 같은 반이 됐어요!`
+            : `🙋 ${me.nickname}님이 같은 반 요청을 보냈어요.`,
+        directChatId: `local-dm:${[managerId, targetId].sort().join('|')}`,
+      } as T
     }
 
     case TUTORIAL_FUNCTIONS.cancelMatch: {
@@ -212,8 +212,25 @@ window.ChannelIOWam = {
     root.style.overflow = 'hidden'
   },
   callFunction,
-  callNativeFunction: async () => {
-    throw new Error('Native functions are unavailable outside Desk')
+  callNativeFunction: async <T>({
+    name,
+    params,
+  }: {
+    name: string
+    params: Record<string, unknown>
+  }): Promise<T> => {
+    // Only the two DM functions are emulated; they log instead of sending.
+    if (name === TUTORIAL_FUNCTIONS.findOrCreateDirectChat) {
+      return { directChat: { id: 'local-dm' } } as T
+    }
+    if (name === TUTORIAL_FUNCTIONS.writeDirectChatMessageAsManager) {
+      const dto = params.dto as { plainText?: string } | undefined
+      console.info(
+        `[같은 반] (로컬) DM ${String(params.directChatId)} ← ${dto?.plainText ?? ''}`
+      )
+      return {} as T
+    }
+    throw new Error(`Native function ${name} is unavailable outside Desk`)
   },
   close: () => window.alert('Desk에서는 창이 닫힙니다.'),
 }

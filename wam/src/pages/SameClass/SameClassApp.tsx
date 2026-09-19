@@ -337,41 +337,43 @@ export function SameClassApp() {
         output.matchState === 'ACCEPTED'
           ? '같은 반이 됐어요!'
           : '요청을 보냈어요. 상대가 수락하면 같은 반이 돼요.'
-      let notified = output.notified
-      let detail = output.notifyError
-        ? `서버 DM 실패: ${output.notifyError}`
-        : ''
-      // The server could not DM (usually a missing app permission). Retry as this manager.
-      if (!notified && output.notifyText && channelId && managerId) {
+      let notified = false
+      const problems: string[] = []
+      if (output.notifyError) problems.push(`서버: ${output.notifyError}`)
+      // Team Member permission → must run as the signed-in manager, i.e. from the WAM.
+      if (output.notifyText && channelId && managerId) {
         try {
-          const { directChat } = readResult(
-            DirectChatResultSchema,
-            await findOrCreateDirectChat.call({
-              channelId,
-              managerIds: [managerId, output.targetId],
-            }),
-            'DM 방'
-          )
+          let directChatId = output.directChatId
+          if (!directChatId) {
+            const { directChat } = readResult(
+              DirectChatResultSchema,
+              await findOrCreateDirectChat.call({
+                channelId,
+                managerIds: [managerId, output.targetId],
+              }),
+              'DM 방'
+            )
+            directChatId = directChat.id
+          }
           await writeDirectMessage.call({
             channelId,
-            directChatId: directChat.id,
+            directChatId,
             broadcast: false,
             dto: { plainText: output.notifyText, managerId },
           })
           notified = true
-          detail = ''
         } catch (caught) {
           const message =
             caught instanceof Error ? caught.message : String(caught)
-          detail = `${detail ? `${detail} · ` : ''}Desk에서도 실패: ${message}`
-          console.error('[같은 반] DM fallback failed', caught)
+          problems.push(`Desk: ${message}`)
+          console.error('[같은 반] DM failed', caught)
         }
       }
       setNotice(
         notified
           ? `${base} 상대에게 다이렉트 메시지를 보냈어요.`
-          : detail
-            ? `${base} 다이렉트 메시지는 못 보냈어요. (${detail})`
+          : output.notifyText
+            ? `${base} 다이렉트 메시지는 못 보냈어요. (${problems.join(' · ')})`
             : base
       )
     } catch (caught) {
