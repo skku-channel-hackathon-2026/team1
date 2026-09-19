@@ -34,7 +34,7 @@ type Screen = 'LOADING' | 'INPUT' | 'LIST' | 'OVERLAY'
 // overflow ends up off-screen with no way to scroll to it. So derive the request from the
 // monitor and stay well inside it. Caps keep the window sane on very large displays.
 const MIN_SIZE = { width: 640, height: 460 }
-const MAX_SIZE = { width: 1400, height: 980 }
+const MAX_SIZE = { width: 1400, height: 900 }
 
 function preferredSize(): { width: number; height: number } {
   const screen = typeof window === 'undefined' ? undefined : window.screen
@@ -43,9 +43,10 @@ function preferredSize(): { width: number; height: number } {
   const clamp = (value: number, min: number, max: number) =>
     Math.round(Math.min(Math.max(value, min), max))
   return {
-    // Desk centres the window; stay inside its viewport with room for its own chrome.
+    // Desk centres the window horizontally but drops it ~190px from the top, so the height
+    // has to leave that offset plus a margin free or the bottom edge lands off-screen.
     width: clamp(availWidth * 0.7, MIN_SIZE.width, MAX_SIZE.width),
-    height: clamp(availHeight * 0.82, MIN_SIZE.height, MAX_SIZE.height),
+    height: clamp(availHeight * 0.7, MIN_SIZE.height, MAX_SIZE.height),
   }
 }
 

@@ -116,5 +116,5 @@ corepack pnpm test:cloudflare && corepack pnpm test:same-class
 
 ## Desk에서 확인할 것
 
-- WAM 창 크기는 `SameClassApp.tsx`의 `preferredSize()`가 모니터 크기의 70%×82%(최대 1400×980)로 계산해 요청한다. Desk는 요청을 그대로 만들므로 화면보다 크게 요청하면 넘친다.
+- WAM 창 크기는 `SameClassApp.tsx`의 `preferredSize()`가 모니터 크기의 70%×70%(최대 1400×900)로 계산해 요청한다. Desk는 요청을 그대로 만들므로 화면보다 크게 요청하면 넘친다.
 - 실제 Desk 렌더링(Bezier 컴포넌트, 다크 테마, 애니메이션)은 배포 후 `앱_개발_검증` 그룹에서 확인해야 한다.
