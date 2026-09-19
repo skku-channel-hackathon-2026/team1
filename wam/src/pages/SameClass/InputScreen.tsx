@@ -124,7 +124,16 @@ export function InputScreen({
   return (
     <div className="sc-stack">
       <div className="sc-hero">
-        <h1 className="sc-display">대학에도 반이 있었다면</h1>
+        <div className="sc-row sc-row--nowrap">
+          <img
+            className="sc-logo"
+            src="./icon-256.png"
+            alt=""
+            width={44}
+            height={44}
+          />
+          <h1 className="sc-display">대학에도 반이 있었다면</h1>
+        </div>
         <p className="sc-body">
           시간표를 넣으면 같은 분반·같은 강의실에 앉는 새내기 중 공강까지 겹치는
           사람을 찾아드려요.

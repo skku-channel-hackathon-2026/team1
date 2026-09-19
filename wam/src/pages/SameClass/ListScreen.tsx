@@ -62,7 +62,16 @@ export function ListScreen({
     <div className="sc-stack">
       <div className="sc-hero">
         <div className="sc-row sc-row--between sc-row--nowrap">
-          <h1 className="sc-title">당신과 같은 반이 될 수 있는 사람</h1>
+          <div className="sc-row sc-row--nowrap">
+            <img
+              className="sc-logo sc-logo--sm"
+              src="./icon-256.png"
+              alt=""
+              width={32}
+              height={32}
+            />
+            <h1 className="sc-title">당신과 같은 반이 될 수 있는 사람</h1>
+          </div>
           <Badge tone="primary">{filtered.length}명</Badge>
         </div>
         <p className="sc-body-sm">

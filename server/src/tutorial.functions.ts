@@ -1,6 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { z } from "zod";
 import {
+  CancelMatchInputSchema,
+  CancelMatchOutputSchema,
   CommandActionInputSchema,
   EmptyInputSchema,
   EmptyOutputSchema,
@@ -16,6 +18,8 @@ import {
   TUTORIAL_WAM_NAME,
   isSeedMember,
   rankMatches,
+  type CancelMatchInput,
+  type CancelMatchOutput,
   type CommandActionInput,
   type GetProfileOutput,
   type MatchCandidate,
@@ -47,6 +51,7 @@ import {
 import { appId, appSecret } from "./config.js";
 import { getDatabase } from "./database.js";
 import {
+  cancelMatch,
   deleteProfile,
   deriveMatchState,
   getProfile,
@@ -311,17 +316,47 @@ export class TutorialFunctions {
     const record = await requestMatch(db, channelId, memberId, input.targetId);
     const matchState = deriveMatchState(record, memberId, input.targetId);
     // Seeded freshmen have no manager account behind them, so there is nobody to DM.
-    const notified = isSeedMember(input.targetId)
-      ? false
-      : await this.notifyDirect(
-          ctx,
-          memberId,
-          input.targetId,
-          matchState === "ACCEPTED"
-            ? `🎒 ${me.nickname}님과 같은 반이 됐어요! 다음 수업에서 옆자리에 앉아봐요.`
-            : `🙋 ${me.nickname}님이 같은 반 요청을 보냈어요. /tutorial 에서 확인해보세요.`,
-        );
-    return { targetId: input.targetId, matchState, notified };
+    if (isSeedMember(input.targetId)) {
+      return { targetId: input.targetId, matchState, notified: false };
+    }
+    const notifyText =
+      matchState === "ACCEPTED"
+        ? `🎒 ${me.nickname}님과 같은 반이 됐어요! 다음 수업에서 옆자리에 앉아봐요.`
+        : `🙋 ${me.nickname}님이 같은 반 요청을 보냈어요. /tutorial 에서 확인해보세요.`;
+    const outcome = await this.notifyDirect(
+      ctx,
+      memberId,
+      input.targetId,
+      notifyText,
+    );
+    return {
+      targetId: input.targetId,
+      matchState,
+      notified: outcome.ok,
+      notifyError: outcome.ok ? undefined : outcome.error,
+      notifyText,
+    };
+  }
+
+  @Func(TUTORIAL_FUNCTIONS.cancelMatch)
+  @Description("Withdraw a 같은 반 request, decline one, or dissolve a match")
+  @InputSchema(CancelMatchInputSchema)
+  @OutputSchema(CancelMatchOutputSchema)
+  async cancelMatch(
+    @Ctx() ctx: Context,
+    @Input() input: CancelMatchInput,
+  ): Promise<CancelMatchOutput> {
+    const memberId = requireManager(ctx);
+    const record = await cancelMatch(
+      getDatabase(),
+      ctx.channel.id,
+      memberId,
+      input.targetId,
+    );
+    return {
+      targetId: input.targetId,
+      matchState: deriveMatchState(record, memberId, input.targetId),
+    };
   }
 
   /**
@@ -334,7 +369,8 @@ export class TutorialFunctions {
     fromManagerId: string,
     toManagerId: string,
     plainText: string,
-  ): Promise<boolean> {
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    let step = "token";
     try {
       const channelId = ctx.channel.id;
       const token = await this.tokenManager.getChannelToken({ channelId });
@@ -345,6 +381,7 @@ export class TutorialFunctions {
           accessToken: string,
         ): Promise<T>;
       };
+      step = "findOrCreateDirectChat";
       const { directChat } = await raw.callNativeFunctionWithToken<{
         directChat: { id: string };
       }>(
@@ -353,15 +390,19 @@ export class TutorialFunctions {
         token.accessToken,
       );
       const api = this.nativeClient.createProxyApi(token.accessToken);
+      step = "writeDirectChatMessageAsManager";
       await api.writeDirectChatMessageAsManager({
         channelId,
         directChatId: directChat.id,
         broadcast: false,
         dto: { plainText, managerId: fromManagerId },
       });
-      return true;
-    } catch {
-      return false;
+      return { ok: true };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : JSON.stringify(error);
+      console.error(`[같은 반] DM failed at ${step}: ${message}`);
+      return { ok: false, error: `${step}: ${message}`.slice(0, 300) };
     }
   }
 }

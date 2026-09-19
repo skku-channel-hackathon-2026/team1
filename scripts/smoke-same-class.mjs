@@ -173,8 +173,12 @@ assert.ok(!("revealedInstances" in again.results[0]));
 await call("tutorial.saveProfile", { ...minji, nickname: "두번째" }, "m2");
 const fromTwo = await call("tutorial.requestMatch", { targetId: "m1" }, "m2");
 assert.equal(fromTwo.matchState, "REQUESTED");
-// A real manager target triggers the DM path; locally there is no channel token, so it fails softly.
+// A real manager target triggers the DM path; locally there is no channel token, so it fails softly
+// and the reason is reported instead of swallowed.
 assert.equal(fromTwo.notified, false);
+assert.equal(typeof fromTwo.notifyError, "string");
+assert.ok(fromTwo.notifyError.length > 0);
+assert.match(fromTwo.notifyText, /같은 반 요청/);
 const seenByOne = await call("tutorial.match", {}, "m1");
 const two = seenByOne.results.find((r) => r.targetId === "m2");
 assert.equal(two.matchState, "RECEIVED");
@@ -190,7 +194,23 @@ for (const [targetId, who] of [
   await assert.rejects(call("tutorial.requestMatch", { targetId }, who));
 }
 
-// 6. Deleting removes the profile and its matches.
+// 6. Cancel: withdraw a request, decline a received one, dissolve a match.
+const c1 = await call("tutorial.cancelMatch", { targetId: "m2" }, "m1"); // was ACCEPTED
+assert.equal(c1.matchState, "NONE");
+assert.equal(
+  (await call("tutorial.match", {}, "m2")).results.find(
+    (r) => r.targetId === "m1",
+  ).matchState,
+  "NONE",
+);
+await call("tutorial.requestMatch", { targetId: "m2" }, "m1");
+const c2 = await call("tutorial.cancelMatch", { targetId: "m1" }, "m2"); // decline
+assert.equal(c2.matchState, "NONE");
+await call("tutorial.requestMatch", { targetId: "m2" }, "m1");
+const c3 = await call("tutorial.cancelMatch", { targetId: "m2" }, "m1"); // withdraw
+assert.equal(c3.matchState, "NONE");
+
+// 7. Deleting removes the profile and its matches.
 await call("tutorial.deleteProfile", {}, "m1");
 assert.deepEqual(await call("tutorial.getProfile", {}, "m1"), {
   profile: null,
@@ -200,5 +220,5 @@ assert.ok(!afterDelete.results.some((r) => r.targetId === "m1"));
 await call("tutorial.deleteProfile", {}, "m2");
 
 console.log(
-  `PASS: 같은 반 profile upsert, seeded ranking (하늘 first of 29, match in ${elapsed}ms), request/accept state, overlap-only after accept, DM notice flag, campus hard filter, delete`,
+  `PASS: 같은 반 profile upsert, seeded ranking (하늘 first of 29, match in ${elapsed}ms), request/accept state, overlap-only after accept, DM notice flag, campus hard filter, cancel/decline/dissolve, delete`,
 );

@@ -19,6 +19,7 @@ export interface OverlayScreenProps {
   notice: string | null
   onBack: () => void
   onRequest: () => void
+  onCancel: () => void
 }
 
 const PART_LABELS: { key: keyof MatchCandidate['parts']; label: string }[] = [
@@ -35,6 +36,7 @@ export function OverlayScreen({
   notice,
   onBack,
   onRequest,
+  onCancel,
 }: OverlayScreenProps) {
   const stateLabel = MATCH_STATE_LABELS[candidate.matchState]
 
@@ -87,18 +89,39 @@ export function OverlayScreen({
             </div>
             <p className="sc-body-sm">{candidate.reasons.join(' · ')}</p>
           </div>
-          <Button
-            pill
-            loading={requesting}
-            disabled={
-              requesting ||
-              candidate.matchState === 'REQUESTED' ||
-              candidate.matchState === 'ACCEPTED'
-            }
-            onClick={onRequest}
-          >
-            {buttonLabel}
-          </Button>
+          <div className="sc-row sc-row--nowrap">
+            {candidate.matchState !== 'NONE' && (
+              <Button
+                variant="secondary"
+                pill
+                disabled={requesting}
+                onClick={onCancel}
+              >
+                {candidate.matchState === 'ACCEPTED'
+                  ? '같은 반 취소'
+                  : candidate.matchState === 'RECEIVED'
+                    ? '거절'
+                    : '요청 취소'}
+              </Button>
+            )}
+            {candidate.matchState !== 'ACCEPTED' &&
+              candidate.matchState !== 'REQUESTED' && (
+                <Button
+                  pill
+                  loading={requesting}
+                  disabled={requesting}
+                  onClick={onRequest}
+                >
+                  {buttonLabel}
+                </Button>
+              )}
+            {candidate.matchState === 'REQUESTED' && (
+              <Badge tone="soft">수락 대기 중</Badge>
+            )}
+            {candidate.matchState === 'ACCEPTED' && (
+              <Badge tone="success">같은 반</Badge>
+            )}
+          </div>
         </div>
       </div>
 

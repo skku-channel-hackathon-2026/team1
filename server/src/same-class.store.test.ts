@@ -3,6 +3,7 @@ import test from "node:test";
 import { DEMO_PRESET, SEED_PROFILES, type Profile } from "@tutorial/shared";
 import type { AppDatabase } from "./database.js";
 import {
+  cancelMatch,
   deleteProfile,
   deriveMatchState,
   getProfile,
@@ -130,4 +131,47 @@ test("deleting a profile also deletes its matches", async () => {
   assert.equal(await getProfile(db, channel, "m1"), null);
   assert.equal((await listMatchRecords(db, channel, "m1")).length, 0);
   assert.equal((await listMatchRecords(db, channel, "m2")).length, 1);
+});
+
+test("cancel withdraws, declines, or dissolves depending on who had requested", async () => {
+  const db = fakeDatabase();
+  // REQUESTED → withdrawn: record gone
+  await requestMatch(db, channel, "a", "b");
+  assert.equal(
+    deriveMatchState(await cancelMatch(db, channel, "a", "b"), "a", "b"),
+    "NONE",
+  );
+  assert.equal((await listMatchRecords(db, channel, "a")).length, 0);
+
+  // RECEIVED → declined: the other side's request is dropped too
+  await requestMatch(db, channel, "a", "b");
+  assert.equal(
+    deriveMatchState(await cancelMatch(db, channel, "b", "a"), "b", "a"),
+    "NONE",
+  );
+  assert.equal((await listMatchRecords(db, channel, "a")).length, 0);
+
+  // ACCEPTED → dissolved for both
+  await requestMatch(db, channel, "a", "b");
+  await requestMatch(db, channel, "b", "a");
+  assert.equal(
+    deriveMatchState(await cancelMatch(db, channel, "a", "b"), "a", "b"),
+    "NONE",
+  );
+  assert.equal((await listMatchRecords(db, channel, "b")).length, 0);
+
+  // Withdrawing my request keeps the other person's request intact
+  await requestMatch(db, channel, "a", "b");
+  await requestMatch(db, channel, "b", "a");
+  // (both requested = ACCEPTED, so this dissolves) — instead build a one-sided record from b
+  await cancelMatch(db, channel, "a", "b");
+  await requestMatch(db, channel, "b", "a");
+  await requestMatch(db, channel, "a", "b"); // now ACCEPTED again
+  await cancelMatch(db, channel, "a", "b"); // dissolve
+  await requestMatch(db, channel, "b", "a"); // b requests only
+  const seenByA = await cancelMatch(db, channel, "a", "b"); // a has nothing to withdraw → decline
+  assert.equal(seenByA, undefined);
+
+  // Cancelling when nothing exists is a no-op
+  assert.equal(await cancelMatch(db, channel, "x", "y"), undefined);
 });

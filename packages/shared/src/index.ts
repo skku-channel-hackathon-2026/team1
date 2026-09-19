@@ -18,6 +18,10 @@ export const TUTORIAL_FUNCTIONS = {
   deleteProfile: "tutorial.deleteProfile",
   match: "tutorial.match",
   requestMatch: "tutorial.requestMatch",
+  cancelMatch: "tutorial.cancelMatch",
+  // Native functions the WAM calls through the manager's own Desk session (fallback DM path).
+  findOrCreateDirectChat: "findOrCreateDirectChat",
+  writeDirectChatMessageAsManager: "writeDirectChatMessageAsManager",
 } as const;
 
 export const CommandActionInputSchema = z.object({
@@ -214,9 +218,26 @@ export const RequestMatchOutputSchema = z.object({
   matchState: MatchStateSchema,
   /** Whether a direct message reached the other manager (best effort; false for seeds or on failure). */
   notified: z.boolean(),
+  /** Why the server-side DM failed, when it did — surfaced so permission problems are visible. */
+  notifyError: z.string().optional(),
+  /** Text the WAM can resend itself through the manager's own session if the server could not. */
+  notifyText: z.string().optional(),
 });
 
 export type RequestMatchOutput = z.infer<typeof RequestMatchOutputSchema>;
+
+export const CancelMatchInputSchema = z.object({
+  targetId: z.string().min(1),
+});
+
+export type CancelMatchInput = z.infer<typeof CancelMatchInputSchema>;
+
+export const CancelMatchOutputSchema = z.object({
+  targetId: z.string(),
+  matchState: MatchStateSchema,
+});
+
+export type CancelMatchOutput = z.infer<typeof CancelMatchOutputSchema>;
 
 export const EmptyInputSchema = z.object({});
 export const EmptyOutputSchema = z.object({});

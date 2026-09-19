@@ -162,6 +162,26 @@ async function callFunction<T>({ name, params }: CallFunctionArgs): Promise<T> {
       return { targetId, matchState, notified } as T
     }
 
+    case TUTORIAL_FUNCTIONS.cancelMatch: {
+      const targetId = String(params.targetId ?? '')
+      const key = pairKey(managerId, targetId)
+      const existing = store.matches[key]
+      if (existing) {
+        const state = deriveState(existing, managerId, targetId)
+        const remaining =
+          state === 'REQUESTED'
+            ? existing.requestedBy.filter((m) => m !== managerId)
+            : []
+        if (remaining.length === 0) delete store.matches[key]
+        else store.matches[key] = { ...existing, requestedBy: remaining }
+        writeStore(store)
+      }
+      return {
+        targetId,
+        matchState: deriveState(store.matches[key], managerId, targetId),
+      } as T
+    }
+
     default:
       throw new Error(`Local host does not implement ${name}`)
   }

@@ -180,3 +180,35 @@ export async function requestMatch(
   await writeJson(db, id, record);
   return record;
 }
+
+/**
+ * Withdraw from a match. REQUESTED → my request disappears; RECEIVED → the other side's
+ * request is declined; ACCEPTED → the pair is dissolved. In every case the record is either
+ * reduced to the remaining party or deleted, so nobody is left "half matched".
+ */
+export async function cancelMatch(
+  db: AppDatabase,
+  channelId: string,
+  me: string,
+  target: string,
+): Promise<MatchRecord | undefined> {
+  const id = matchRecordId(channelId, me, target);
+  const existing = await readJson(db, id, MatchRecordSchema);
+  if (!existing) return undefined;
+  const state = deriveMatchState(existing, me, target);
+  const remaining =
+    state === "REQUESTED"
+      ? existing.requestedBy.filter((member) => member !== me)
+      : []; // RECEIVED (decline) and ACCEPTED (dissolve) clear both sides
+  if (remaining.length === 0) {
+    await db.prepare("DELETE FROM app_records WHERE id = ?").bind(id).run();
+    return undefined;
+  }
+  const record: MatchRecord = {
+    pair: existing.pair,
+    requestedBy: remaining,
+    updatedAt: new Date().toISOString(),
+  };
+  await writeJson(db, id, record);
+  return record;
+}

@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useCallFunction, useWamSize } from '@channel.io/app-sdk-wam'
 import {
+  useCallFunction,
+  useNativeFunction,
+  useWamSize,
+} from '@channel.io/app-sdk-wam'
+import {
+  CancelMatchOutputSchema,
   GetProfileOutputSchema,
   MatchOutputSchema,
   RequestMatchOutputSchema,
   SaveProfileOutputSchema,
   TUTORIAL_FUNCTIONS,
   type GetProfileOutput,
+  type CancelMatchOutput,
   type MatchCandidate,
   type MatchOutput,
   type Profile,
@@ -111,6 +117,15 @@ function readResult<T>(schema: ResultSchema<T>, raw: unknown, what: string): T {
   )
 }
 
+const DirectChatResultSchema: ResultSchema<{ directChat: { id: string } }> = {
+  safeParse(value: unknown) {
+    const chat = (value as { directChat?: { id?: unknown } } | null)?.directChat
+    return chat && typeof chat.id === 'string'
+      ? { success: true as const, data: { directChat: { id: chat.id } } }
+      : { success: false as const }
+  },
+}
+
 function describeError(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message)
     return `${fallback} (${error.message})`
@@ -153,6 +168,18 @@ export function SameClassApp() {
   const requestMatch = useCallFunction<RequestMatchOutput>({
     appId,
     name: TUTORIAL_FUNCTIONS.requestMatch,
+  })
+  const cancelMatch = useCallFunction<CancelMatchOutput>({
+    appId,
+    name: TUTORIAL_FUNCTIONS.cancelMatch,
+  })
+  // Fallback DM path: the same native functions, but through this manager's own Desk session
+  // (the tutorial's "Send as a manager" button worked this way).
+  const findOrCreateDirectChat = useNativeFunction<{
+    directChat: { id: string }
+  }>({ name: TUTORIAL_FUNCTIONS.findOrCreateDirectChat })
+  const writeDirectMessage = useNativeFunction<unknown>({
+    name: TUTORIAL_FUNCTIONS.writeDirectChatMessageAsManager,
   })
 
   // One size for every screen: re-requesting on each transition makes Desk jump.
@@ -306,21 +333,99 @@ export function SameClassApp() {
             : candidate
         )
       )
+      const base =
+        output.matchState === 'ACCEPTED'
+          ? '같은 반이 됐어요!'
+          : '요청을 보냈어요. 상대가 수락하면 같은 반이 돼요.'
+      let notified = output.notified
+      let detail = output.notifyError
+        ? `서버 DM 실패: ${output.notifyError}`
+        : ''
+      // The server could not DM (usually a missing app permission). Retry as this manager.
+      if (!notified && output.notifyText && channelId && managerId) {
+        try {
+          const { directChat } = readResult(
+            DirectChatResultSchema,
+            await findOrCreateDirectChat.call({
+              channelId,
+              managerIds: [managerId, output.targetId],
+            }),
+            'DM 방'
+          )
+          await writeDirectMessage.call({
+            channelId,
+            directChatId: directChat.id,
+            broadcast: false,
+            dto: { plainText: output.notifyText, managerId },
+          })
+          notified = true
+          detail = ''
+        } catch (caught) {
+          const message =
+            caught instanceof Error ? caught.message : String(caught)
+          detail = `${detail ? `${detail} · ` : ''}Desk에서도 실패: ${message}`
+          console.error('[같은 반] DM fallback failed', caught)
+        }
+      }
       setNotice(
-        output.notified
-          ? output.matchState === 'ACCEPTED'
-            ? '같은 반이 됐어요! 상대에게 다이렉트 메시지를 보냈어요.'
-            : '요청을 보냈어요. 상대에게 다이렉트 메시지로 알렸어요.'
-          : output.matchState === 'ACCEPTED'
-            ? '같은 반이 됐어요!'
-            : '요청을 보냈어요. 상대가 수락하면 같은 반이 돼요.'
+        notified
+          ? `${base} 상대에게 다이렉트 메시지를 보냈어요.`
+          : detail
+            ? `${base} 다이렉트 메시지는 못 보냈어요. (${detail})`
+            : base
       )
     } catch (caught) {
       setError(describeError(caught, '요청을 보내지 못했어요.'))
     } finally {
       setBusy(false)
     }
-  }, [requestMatch, selectedId])
+  }, [
+    channelId,
+    findOrCreateDirectChat,
+    managerId,
+    requestMatch,
+    selectedId,
+    writeDirectMessage,
+  ])
+
+  const handleCancel = useCallback(async () => {
+    if (!selectedId) return
+    const current = results.find((c) => c.targetId === selectedId)
+    const question =
+      current?.matchState === 'ACCEPTED'
+        ? '같은 반을 취소할까요? 상대에게도 같은 반이 해제돼요.'
+        : current?.matchState === 'RECEIVED'
+          ? '이 요청을 거절할까요?'
+          : '보낸 요청을 취소할까요?'
+    if (!window.confirm(question)) return
+    setBusy(true)
+    setError(null)
+    try {
+      const output = readResult(
+        CancelMatchOutputSchema,
+        await cancelMatch.call({ targetId: selectedId }),
+        '취소'
+      )
+      setResults((previous) =>
+        previous.map((candidate) =>
+          candidate.targetId === output.targetId
+            ? { ...candidate, matchState: output.matchState }
+            : candidate
+        )
+      )
+      setNotice(
+        current?.matchState === 'ACCEPTED'
+          ? '같은 반을 취소했어요.'
+          : current?.matchState === 'RECEIVED'
+            ? '요청을 거절했어요.'
+            : '보낸 요청을 취소했어요.'
+      )
+    } catch (caught) {
+      setError(describeError(caught, '취소하지 못했어요.'))
+    } finally {
+      setBusy(false)
+    }
+  }, [cancelMatch, results, selectedId])
 
   if (wamDataError) {
     return (
@@ -393,6 +498,7 @@ export function SameClassApp() {
             setScreen('LIST')
           }}
           onRequest={() => void handleRequest()}
+          onCancel={() => void handleCancel()}
         />
       </div>
     )
