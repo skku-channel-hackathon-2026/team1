@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useCallFunction, useWamSize } from '@channel.io/app-sdk-wam'
 import {
+  GetProfileOutputSchema,
+  MatchOutputSchema,
+  RequestMatchOutputSchema,
+  SaveProfileOutputSchema,
   TUTORIAL_FUNCTIONS,
   type GetProfileOutput,
   type MatchCandidate,
@@ -15,7 +19,7 @@ import { useTutorialWamData } from '../../hooks/useTutorialWamData'
 import { InputScreen } from './InputScreen'
 import { ListScreen } from './ListScreen'
 import { OverlayScreen } from './OverlayScreen'
-import { Spinner } from './ui'
+import { Button, Spinner } from './ui'
 import './sameClass.css'
 
 type Screen = 'LOADING' | 'INPUT' | 'LIST' | 'OVERLAY'
@@ -78,6 +82,35 @@ function toInput(profile: Profile): ProfileInput {
   }
 }
 
+/** Structural stand-in for a Zod schema so the WAM does not need zod as a direct dependency. */
+interface ResultSchema<T> {
+  safeParse(value: unknown): { success: true; data: T } | { success: false }
+}
+
+/**
+ * Validate a Function result before using it.
+ * The host normally returns the result directly, but a wrapped envelope would otherwise
+ * leave every field undefined and the screen silently unchanged. Unwrap one layer, then
+ * fail loudly with the raw payload so the cause is visible instead of invisible.
+ */
+function readResult<T>(schema: ResultSchema<T>, raw: unknown, what: string): T {
+  const candidates: unknown[] = [raw]
+  if (raw && typeof raw === 'object') {
+    const record = raw as Record<string, unknown>
+    for (const key of ['result', 'data', 'output']) {
+      if (record[key] !== undefined) candidates.push(record[key])
+    }
+  }
+  for (const candidate of candidates) {
+    const parsed = schema.safeParse(candidate)
+    if (parsed.success) return parsed.data
+  }
+  console.error(`[같은 반] unexpected ${what} response`, raw)
+  throw new Error(
+    `${what} 응답을 이해하지 못했어요: ${JSON.stringify(raw ?? null).slice(0, 180)}`
+  )
+}
+
 function describeError(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message)
     return `${fallback} (${error.message})`
@@ -127,7 +160,7 @@ export function SameClassApp() {
   }, [setSize])
 
   const runMatch = useCallback(async () => {
-    const output = await match.call({})
+    const output = readResult(MatchOutputSchema, await match.call({}), '추천')
     setResults(output.results)
     setPoolSize(output.poolSize)
     if (output.me) setProfile(output.me)
@@ -141,7 +174,11 @@ export function SameClassApp() {
     booted.current = true
     void (async () => {
       try {
-        const { profile: stored } = await getProfile.call({})
+        const { profile: stored } = readResult(
+          GetProfileOutputSchema,
+          await getProfile.call({}),
+          '프로필'
+        )
         if (stored) {
           setProfile(stored)
           setDraft(toInput(stored))
@@ -174,7 +211,11 @@ export function SameClassApp() {
       setBusy(true)
       setError(null)
       try {
-        const { profile: stored } = await saveProfile.call(input)
+        const { profile: stored } = readResult(
+          SaveProfileOutputSchema,
+          await saveProfile.call(input),
+          '시간표 저장'
+        )
         setProfile(stored)
         await runMatch()
         setScreen('LIST')
@@ -252,7 +293,11 @@ export function SameClassApp() {
     setBusy(true)
     setError(null)
     try {
-      const output = await requestMatch.call({ targetId: selectedId })
+      const output = readResult(
+        RequestMatchOutputSchema,
+        await requestMatch.call({ targetId: selectedId }),
+        '같은 반 요청'
+      )
       setResults((previous) =>
         previous.map((candidate) =>
           candidate.targetId === output.targetId
@@ -289,7 +334,7 @@ export function SameClassApp() {
     )
   }
 
-  if (screen === 'INPUT' || !profile) {
+  if (screen === 'INPUT') {
     return (
       <div className="sc-root">
         <InputScreen
@@ -301,6 +346,24 @@ export function SameClassApp() {
           hasSavedProfile={!!profile}
           onCancel={profile ? () => setScreen('LIST') : undefined}
         />
+      </div>
+    )
+  }
+
+  // Past the input screen the profile must exist. If it does not, say so instead of
+  // bouncing back to the form with no explanation.
+  if (!profile) {
+    return (
+      <div className="sc-root">
+        <p className="sc-error">
+          {error ??
+            '시간표를 저장했지만 프로필을 받지 못했어요. 다시 시도해주세요.'}
+        </p>
+        <div className="sc-row">
+          <Button onClick={() => setScreen('INPUT')}>
+            시간표 입력으로 돌아가기
+          </Button>
+        </div>
       </div>
     )
   }
