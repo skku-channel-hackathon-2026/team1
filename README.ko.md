@@ -1,3 +1,5 @@
+> **해커톤 참가팀 안내:** 현재 서버는 Cloudflare Workers, DB는 D1이며 팀 레포 main CI 성공 후 자동 배포됩니다. 아래 내용은 원본 튜토리얼의 Node 서버 참고 문서입니다. 실제 팀 개발·초대·배포·마이그레이션 절차는 [현재 README](README.md)와 [해커톤 가이드](HACKATHON.ko.md)를 따르세요.
+
 # Channel App 튜토리얼 — TypeScript
 
 > **성균관대 해커톤 팀 개발 안내**: [시작하기·배포·DB 마이그레이션](HACKATHON.ko.md) · [Desk 검증 기록](docs/desk-qa.md)
