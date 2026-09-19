@@ -1,8 +1,8 @@
 // Seeded freshmen so the demo never shows an empty screen — 자과캠 소프트웨어학과 1학년 cohort.
 // Section catalog: subject + professor + room + weekly meetings. Each meeting is one CourseInstance.
-// Against the demo timetable of the same department: 2 people share ≥3 instances, 8 share 1–2,
-// everyone else shares 0, and the top candidate produces the Wednesday
-// "class → free → class → free → class" pattern.
+// Against the demo timetable of the same department the overlap is a staircase from a near twin
+// (5 of 6 sections) down to nobody-shared, so the list shows the whole range of scores. The top
+// candidate produces the Wednesday "class → free → class → free → class" pattern.
 
 import type { Campus, CourseInstance, Day, Profile } from "./timetable.js";
 
@@ -305,51 +305,85 @@ interface SeedSpec {
   sections: SectionKey[];
 }
 
-// Shared shape for both campuses (see the header comment for the distribution).
+// Same-department spread against the demo timetable (sections shared, 6 in the demo):
+//   5 shared ×1 · 4 shared ×2 · 3 shared ×3 · 2 shared ×5 · 1 shared ×6 · 0 shared ×6.
+// The 0-shared people still cross the demo in the same building or share free periods, so the
+// bottom of the list is not empty. Other departments overlap only through 교양.
 const SEED_SPECS: SeedSpec[] = [
-  // 같은 인스턴스 3개 이상 (2명)
+  // 5 shared — near twin (index 0 → 우주, top of the list; keeps the Wednesday pattern)
   {
     dept: 0,
-    sections: ["MAJOR1_A", "MAJOR2_A", "MAJOR3_C", "ENG_C", "WRI_B", "GE_1"],
+    sections: ["MAJOR1_A", "MAJOR2_A", "MAJOR3_A", "ENG_A", "WRI_B", "GE_1"],
+  },
+  // 4 shared
+  {
+    dept: 0,
+    sections: ["MAJOR1_A", "MAJOR2_A", "MAJOR3_A", "ENG_C", "WRI_A", "GE_2"],
   },
   {
     dept: 0,
-    sections: ["MAJOR1_A", "MAJOR3_A", "ENG_B", "MAJOR2_B", "WRI_C", "GE_2"],
+    sections: ["MAJOR1_A", "MAJOR2_A", "MAJOR3_C", "ENG_A", "WRI_C", "GE_1"],
   },
-  // 1~2개 (8명)
+  // 3 shared
   {
     dept: 0,
-    sections: ["MAJOR1_A", "MAJOR2_B", "MAJOR3_C", "ENG_C", "WRI_C", "GE_3"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR2_A", "MAJOR1_B", "MAJOR3_C", "ENG_B", "WRI_B", "GE_2"],
+    sections: ["MAJOR1_A", "MAJOR2_B", "MAJOR3_A", "ENG_B", "WRI_A", "GE_3"],
   },
   {
     dept: 0,
-    sections: ["MAJOR3_A", "MAJOR1_C", "MAJOR2_B", "ENG_B", "WRI_B", "GE_4"],
+    sections: ["MAJOR1_C", "MAJOR2_A", "MAJOR3_A", "ENG_A", "WRI_B", "GE_4"],
   },
   {
     dept: 0,
-    sections: ["ENG_A", "MAJOR1_B", "MAJOR2_C", "MAJOR3_B", "WRI_C", "GE_5"],
+    sections: ["MAJOR1_A", "MAJOR2_A", "MAJOR3_C", "ENG_C", "WRI_A", "GE_5"],
+  },
+  // 2 shared
+  {
+    dept: 0,
+    sections: ["MAJOR1_B", "MAJOR2_A", "MAJOR3_C", "ENG_A", "WRI_B", "GE_2"],
   },
   {
     dept: 0,
-    sections: ["WRI_A", "MAJOR1_B", "MAJOR2_C", "MAJOR3_C", "ENG_D", "GE_2"],
+    sections: ["MAJOR1_A", "MAJOR2_B", "MAJOR3_C", "ENG_B", "WRI_A", "GE_3"],
   },
   {
     dept: 0,
-    sections: ["GE_1", "MAJOR1_C", "MAJOR2_B", "MAJOR3_B", "ENG_C", "WRI_B"],
+    sections: ["MAJOR1_C", "MAJOR2_D", "MAJOR3_B", "ENG_A", "WRI_A", "GE_2"],
   },
   {
     dept: 0,
-    sections: ["WRI_A", "GE_1", "MAJOR1_B", "MAJOR2_C", "MAJOR3_B", "ENG_C"],
+    sections: ["MAJOR1_A", "MAJOR2_B", "MAJOR3_A", "ENG_B", "WRI_C", "GE_2"],
   },
   {
     dept: 0,
-    sections: ["MAJOR2_A", "MAJOR1_B", "MAJOR3_C", "ENG_D", "WRI_C", "GE_3"],
+    sections: ["MAJOR1_B", "MAJOR2_A", "MAJOR3_C", "ENG_C", "WRI_B", "GE_1"],
   },
-  // 0개 — 같은 학과
+  // 1 shared
+  {
+    dept: 0,
+    sections: ["MAJOR1_A", "MAJOR2_B", "MAJOR3_C", "ENG_B", "WRI_B", "GE_4"],
+  },
+  {
+    dept: 0,
+    sections: ["MAJOR1_B", "MAJOR2_A", "MAJOR3_C", "ENG_D", "WRI_C", "GE_3"],
+  },
+  {
+    dept: 0,
+    sections: ["MAJOR1_C", "MAJOR2_B", "MAJOR3_A", "ENG_B", "WRI_B", "GE_5"],
+  },
+  {
+    dept: 0,
+    sections: ["MAJOR1_B", "MAJOR2_C", "MAJOR3_B", "ENG_A", "WRI_C", "GE_5"],
+  },
+  {
+    dept: 0,
+    sections: ["MAJOR1_C", "MAJOR2_D", "MAJOR3_C", "ENG_B", "WRI_A", "GE_4"],
+  },
+  {
+    dept: 0,
+    sections: ["MAJOR1_B", "MAJOR2_C", "MAJOR3_B", "ENG_C", "WRI_B", "GE_1"],
+  },
+  // 0 shared — same building / shared free periods only
   {
     dept: 0,
     sections: ["MAJOR1_B", "MAJOR2_C", "MAJOR3_B", "ENG_C", "WRI_B", "GE_2"],
@@ -374,38 +408,10 @@ const SEED_SPECS: SeedSpec[] = [
     dept: 0,
     sections: ["MAJOR1_C", "MAJOR2_D", "MAJOR3_B", "ENG_D", "WRI_B", "GE_5"],
   },
-  {
-    dept: 0,
-    sections: ["MAJOR1_B", "MAJOR2_C", "MAJOR3_B", "ENG_C", "WRI_C", "GE_4"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_C", "MAJOR2_B", "MAJOR3_C", "ENG_B", "WRI_B", "GE_3"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_B", "MAJOR2_C", "MAJOR3_B", "ENG_D", "WRI_B", "GE_2"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_C", "MAJOR2_D", "MAJOR3_C", "ENG_B", "WRI_C", "GE_4"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_B", "MAJOR2_C", "MAJOR3_B", "ENG_C", "WRI_B", "GE_5"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_C", "MAJOR2_B", "MAJOR3_B", "ENG_D", "WRI_C", "GE_2"],
-  },
-  {
-    dept: 0,
-    sections: ["MAJOR1_B", "MAJOR2_C", "MAJOR3_C", "ENG_B", "WRI_C", "GE_3"],
-  },
-  // 타 학과 — 교양으로만 겹친다
+  // 타 학과 — 교양으로만 겹친다 (2 / 1 / 2 / 0 / 1 / 0 shared)
   { dept: 1, sections: ["DEPT2_X", "DEPT2_Y", "ENG_A", "WRI_A", "GE_2"] },
   { dept: 1, sections: ["DEPT2_X", "DEPT2_Y", "ENG_C", "WRI_B", "GE_1"] },
-  { dept: 2, sections: ["DEPT3_X", "DEPT3_Y", "ENG_A", "WRI_C", "GE_2"] },
+  { dept: 2, sections: ["DEPT3_X", "DEPT3_Y", "ENG_A", "WRI_C", "GE_1"] },
   { dept: 2, sections: ["DEPT3_X", "DEPT3_Y", "ENG_D", "WRI_B", "GE_3"] },
   { dept: 3, sections: ["DEPT4_X", "DEPT4_Y", "ENG_B", "WRI_A", "GE_4"] },
   { dept: 3, sections: ["DEPT4_X", "DEPT4_Y", "ENG_C", "WRI_C", "GE_5"] },

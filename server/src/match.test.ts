@@ -48,14 +48,25 @@ test("building keys group the codes that belong to one building", () => {
   );
 });
 
-test("seed distribution around the demo timetable matches the PRD (2 with ≥3, 8 with 1–2)", () => {
+test("seed distribution is a staircase from a near twin down to nobody shared", () => {
   const sameDepartment = rankMatches(me, SEED_PROFILES).filter(
     (result) => result.department === me.department,
   );
-  const shared = sameDepartment.map((result) => result.sameRoom.length);
-  assert.equal(shared.filter((count) => count >= 3).length, 2);
-  assert.equal(shared.filter((count) => count === 1 || count === 2).length, 8);
+  const histogram: Record<number, number> = {};
+  for (const result of sameDepartment) {
+    histogram[result.sameCourseCount] =
+      (histogram[result.sameCourseCount] ?? 0) + 1;
+  }
+  assert.deepEqual(histogram, { 0: 6, 1: 6, 2: 5, 3: 3, 4: 2, 5: 1 });
   assert.equal(sameDepartment.length, 23);
+  // Scores spread across the whole range instead of clustering near zero.
+  const scores = rankMatches(me, SEED_PROFILES).map((r) => r.score);
+  assert.ok(scores[0] >= 85, `top ${scores[0]}`);
+  assert.ok(
+    scores.some((s) => s >= 40 && s <= 60),
+    "mid-range candidates exist",
+  );
+  assert.ok(scores.at(-1)! <= 5, "bottom is near zero");
 });
 
 test("우주 ranks first and the Wednesday summary reads class → gap → class", () => {
@@ -67,7 +78,7 @@ test("우주 ranks first and the Wednesday summary reads class → gap → class
     top.dailySummary.WED,
     "2교시 같이 듣기 → 공강 1시간 → 4교시 같이 듣기 → 공강 1시간 → 6교시 같이 듣기",
   );
-  assert.equal(top.reasons[0], "같은 수업 3개");
+  assert.equal(top.reasons[0], "같은 수업 5개");
   assert.ok(top.reasons.every((line) => !/점심|끝나고/.test(line)));
 });
 
