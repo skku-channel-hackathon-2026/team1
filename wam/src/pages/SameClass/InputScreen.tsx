@@ -1,10 +1,7 @@
 import { useCallback, useState } from 'react'
 import {
-  CAMPUS_LABELS,
-  DEMO_PRESETS,
+  DEMO_PRESET,
   instanceId,
-  matchesDemoPreset,
-  type Campus,
   type CourseInstance,
   type Day,
   type ProfileInput,
@@ -12,7 +9,7 @@ import {
 
 import { CourseEditor } from './CourseEditor'
 import { TimetableGrid } from './TimetableGrid'
-import { Badge, Button, Field, Input, Segmented } from './ui'
+import { Badge, Button, Field, Input } from './ui'
 
 export interface InputScreenProps {
   draft: ProfileInput
@@ -54,36 +51,12 @@ export function InputScreen({
   )
 
   const loadPreset = useCallback(() => {
-    const preset = DEMO_PRESETS[draft.campus]
     onChange({
       ...draft,
-      department: preset.department,
-      instances: preset.instances,
+      department: DEMO_PRESET.department,
+      instances: DEMO_PRESET.instances,
     })
   }, [draft, onChange])
-
-  // Switching campus while the demo timetable is loaded swaps in that campus's demo:
-  // different courses, professors and buildings — not just a re-labelled room number.
-  const changeCampus = useCallback(
-    (campus: Campus) => {
-      if (campus === draft.campus) return
-      if (matchesDemoPreset(draft.instances, draft.campus)) {
-        const preset = DEMO_PRESETS[campus]
-        onChange({
-          ...draft,
-          campus,
-          department:
-            draft.department === DEMO_PRESETS[draft.campus].department
-              ? preset.department
-              : draft.department,
-          instances: preset.instances,
-        })
-        return
-      }
-      onChange({ ...draft, campus })
-    },
-    [draft, onChange]
-  )
 
   const openAdd = useCallback((day?: Day, period?: number) => {
     setEditor({
@@ -222,15 +195,6 @@ export function InputScreen({
             />
           </Field>
         </div>
-        <Segmented<Campus>
-          label="캠퍼스"
-          value={draft.campus}
-          options={(Object.keys(CAMPUS_LABELS) as Campus[]).map((campus) => ({
-            value: campus,
-            label: CAMPUS_LABELS[campus],
-          }))}
-          onChange={changeCampus}
-        />
       </section>
 
       {error && <p className="sc-error">{error}</p>}

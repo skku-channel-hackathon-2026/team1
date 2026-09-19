@@ -1,9 +1,8 @@
-// Seeded freshmen so the demo never shows an empty screen — one cohort per campus.
+// Seeded freshmen so the demo never shows an empty screen — 자과캠 소프트웨어학과 1학년 cohort.
 // Section catalog: subject + professor + room + weekly meetings. Each meeting is one CourseInstance.
-// Both campuses share the same *shape* (same section keys, same days/periods) so the PRD's
-// distribution holds on either side: against the demo timetable of the same department,
-// 2 people share ≥3 instances, 8 share 1–2, everyone else shares 0, and the top candidate
-// produces the Wednesday "class → free → class → free → class" pattern.
+// Against the demo timetable of the same department: 2 people share ≥3 instances, 8 share 1–2,
+// everyone else shares 0, and the top candidate produces the Wednesday
+// "class → free → class → free → class" pattern.
 
 import type { Campus, CourseInstance, Day, Profile } from "./timetable.js";
 
@@ -59,178 +58,6 @@ export type SectionKey =
   | "DEPT4_Y";
 
 type Catalog = Record<SectionKey, Section>;
-
-// 인사캠 — 경영학과 1학년. 법학관 20, 퇴계인문관 31, 다산경제관 32, 경영관 33, 호암관 50, 수선관 61.
-export const HUMANITIES_SECTIONS: Catalog = {
-  MAJOR1_A: {
-    subject: "경영학원론",
-    professor: "김예진",
-    room: "33302",
-    meetings: twice("MON", "WED", 2),
-  },
-  MAJOR1_B: {
-    subject: "경영학원론",
-    professor: "오정민",
-    room: "33304",
-    meetings: twice("TUE", "THU", 2),
-  },
-  MAJOR1_C: {
-    subject: "경영학원론",
-    professor: "임하늘",
-    room: "33401",
-    meetings: twice("MON", "WED", 5),
-  },
-  MAJOR2_A: {
-    subject: "회계원리",
-    professor: "박성훈",
-    room: "32205",
-    meetings: twice("MON", "WED", 4),
-  },
-  MAJOR2_B: {
-    subject: "회계원리",
-    professor: "유재석",
-    room: "32206",
-    meetings: twice("TUE", "THU", 4),
-  },
-  MAJOR2_C: {
-    subject: "회계원리",
-    professor: "강민호",
-    room: "32305",
-    meetings: twice("MON", "WED", 2),
-  },
-  MAJOR2_D: {
-    subject: "회계원리",
-    professor: "신혜원",
-    room: "32303",
-    meetings: twice("TUE", "THU", 2),
-  },
-  MAJOR3_A: {
-    subject: "경제학원론",
-    professor: "이수민",
-    room: "32301",
-    meetings: twice("TUE", "THU", 2),
-  },
-  MAJOR3_B: {
-    subject: "경제학원론",
-    professor: "장미란",
-    room: "32302",
-    meetings: twice("MON", "WED", 4),
-  },
-  MAJOR3_C: {
-    subject: "경제학원론",
-    professor: "서준호",
-    room: "32401",
-    meetings: twice("TUE", "THU", 5),
-  },
-  ENG_A: {
-    subject: "대학영어",
-    professor: "Sarah Kim",
-    room: "31207",
-    meetings: twice("TUE", "THU", 4),
-  },
-  ENG_B: {
-    subject: "대학영어",
-    professor: "James Lee",
-    room: "31208",
-    meetings: twice("MON", "WED", 3),
-  },
-  ENG_C: {
-    subject: "대학영어",
-    professor: "홍유진",
-    room: "31301",
-    meetings: twice("TUE", "THU", 3),
-  },
-  ENG_D: {
-    subject: "대학영어",
-    professor: "김도현",
-    room: "31302",
-    meetings: twice("MON", "WED", 6),
-  },
-  WRI_A: {
-    subject: "글쓰기와 소통",
-    professor: "한지원",
-    room: "31305",
-    meetings: once("FRI", 3),
-  },
-  WRI_B: {
-    subject: "글쓰기와 소통",
-    professor: "문선영",
-    room: "31306",
-    meetings: once("FRI", 2),
-  },
-  WRI_C: {
-    subject: "글쓰기와 소통",
-    professor: "배지훈",
-    room: "31402",
-    meetings: once("TUE", 6),
-  },
-  GE_1: {
-    subject: "컴퓨팅사고와 SW코딩",
-    professor: "오세훈",
-    room: "61301",
-    meetings: once("WED", 6),
-  },
-  GE_2: {
-    subject: "철학의 이해",
-    professor: "김철수",
-    room: "31405",
-    meetings: once("THU", 6),
-  },
-  GE_3: {
-    subject: "심리학개론",
-    professor: "이나영",
-    room: "50201",
-    meetings: once("FRI", 5),
-  },
-  GE_4: {
-    subject: "법과 사회",
-    professor: "정의철",
-    room: "20301",
-    meetings: once("MON", 6),
-  },
-  GE_5: {
-    subject: "통계학입문",
-    professor: "배수지",
-    room: "32403",
-    meetings: once("FRI", 4),
-  },
-  DEPT2_X: {
-    subject: "미시경제학원론",
-    professor: "조민수",
-    room: "32304",
-    meetings: twice("MON", "WED", 2),
-  },
-  DEPT2_Y: {
-    subject: "경제수학",
-    professor: "권혁진",
-    room: "32402",
-    meetings: twice("TUE", "THU", 5),
-  },
-  DEPT3_X: {
-    subject: "사회학개론",
-    professor: "윤태호",
-    room: "31401",
-    meetings: twice("MON", "WED", 4),
-  },
-  DEPT3_Y: {
-    subject: "사회조사입문",
-    professor: "김보라",
-    room: "31304",
-    meetings: twice("TUE", "THU", 3),
-  },
-  DEPT4_X: {
-    subject: "리더십의 이해",
-    professor: "최우영",
-    room: "20205",
-    meetings: twice("TUE", "THU", 2),
-  },
-  DEPT4_Y: {
-    subject: "정치학개론",
-    professor: "박정훈",
-    room: "20303",
-    meetings: twice("MON", "WED", 5),
-  },
-};
 
 // 자과캠 — 소프트웨어학과 1학년. 수성관 05, 제1공학관 21·22·23, 제2공학관 25·26·27, 제1과학관 31,
 // 제2과학관 32, 약학관 51, 생명공학관 61. Same slots as 인사캠, different courses and people.
@@ -406,16 +233,14 @@ export const SCIENCE_SECTIONS: Catalog = {
 };
 
 export const SECTIONS_BY_CAMPUS: Record<Campus, Catalog> = {
-  HUMANITIES: HUMANITIES_SECTIONS,
   SCIENCE: SCIENCE_SECTIONS,
 };
 
-/** Kept for callers that only know the 인사캠 catalog. */
-export const SECTIONS = HUMANITIES_SECTIONS;
+export const SECTIONS = SCIENCE_SECTIONS;
 
 export function instancesOf(
   keys: SectionKey[],
-  campus: Campus = "HUMANITIES",
+  campus: Campus = "SCIENCE",
 ): CourseInstance[] {
   const catalog = SECTIONS_BY_CAMPUS[campus];
   return keys.flatMap((key) => {
@@ -448,11 +273,6 @@ export interface DemoPreset {
 
 /** One-click demo timetable per campus. Deliberately has no nickname — the user stays themselves. */
 export const DEMO_PRESETS: Record<Campus, DemoPreset> = {
-  HUMANITIES: {
-    department: "경영학과",
-    campus: "HUMANITIES",
-    instances: instancesOf(DEMO_SECTIONS, "HUMANITIES"),
-  },
   SCIENCE: {
     department: "소프트웨어학과",
     campus: "SCIENCE",
@@ -460,7 +280,7 @@ export const DEMO_PRESETS: Record<Campus, DemoPreset> = {
   },
 };
 
-export const DEMO_PRESET = DEMO_PRESETS.HUMANITIES;
+export const DEMO_PRESET = DEMO_PRESETS.SCIENCE;
 
 /** True when `instances` is exactly one of the demo timetables (used to swap presets on campus change). */
 export function matchesDemoPreset(
@@ -477,7 +297,6 @@ export function matchesDemoPreset(
 
 // Department slot → real name per campus. DEPT1 is the demo department.
 const DEPARTMENTS: Record<Campus, [string, string, string, string]> = {
-  HUMANITIES: ["경영학과", "경제학과", "사회학과", "글로벌리더학부"],
   SCIENCE: ["소프트웨어학과", "전자전기공학부", "기계공학부", "약학과"],
 };
 
@@ -593,37 +412,6 @@ const SEED_SPECS: SeedSpec[] = [
 ];
 
 const NICKNAMES: Record<Campus, string[]> = {
-  HUMANITIES: [
-    "하늘",
-    "도윤",
-    "봄비",
-    "초코",
-    "새싹",
-    "감자",
-    "구름",
-    "달빛",
-    "여름",
-    "노을",
-    "바다",
-    "산들",
-    "라떼",
-    "모카",
-    "솔방울",
-    "은하",
-    "참새",
-    "무지개",
-    "조약돌",
-    "도토리",
-    "이슬",
-    "나무",
-    "파도",
-    "민트",
-    "코코",
-    "하루",
-    "별빛",
-    "연두",
-    "루비",
-  ],
   SCIENCE: [
     "우주",
     "새벽",
@@ -674,11 +462,8 @@ function buildCohort(campus: Campus, idPrefix: string): Profile[] {
   }));
 }
 
-/** 29 freshmen per campus. The other campus is what the hard filter removes. */
-export const SEED_PROFILES: Profile[] = [
-  ...buildCohort("HUMANITIES", "h"),
-  ...buildCohort("SCIENCE", "s"),
-];
+/** 29 freshmen on 자과캠. */
+export const SEED_PROFILES: Profile[] = buildCohort("SCIENCE", "s");
 
 export function seedProfilesOn(campus: Campus): Profile[] {
   return SEED_PROFILES.filter((profile) => profile.campus === campus);

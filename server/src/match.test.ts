@@ -2,9 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEMO_PRESET,
-  DEMO_PRESETS,
   SEED_PROFILES,
-  seedProfilesOn,
   buildDailySummary,
   buildSlotGrid,
   buildingKey,
@@ -34,12 +32,19 @@ test("free periods exist only between the first and last class of a day", () => 
   assert.equal(grid.FRI[4].kind, "NONE");
 });
 
-test("building keys are campus-scoped so code 31 never collides", () => {
-  assert.equal(buildingKey("HUMANITIES", "31207"), "HUMANITIES:퇴계인문관");
+test("building keys group the codes that belong to one building", () => {
   assert.equal(buildingKey("SCIENCE", "31207"), "SCIENCE:제1과학관");
   assert.equal(
-    buildingKey("HUMANITIES", "61101"),
-    buildingKey("HUMANITIES", "62101"),
+    buildingKey("SCIENCE", "21101"),
+    buildingKey("SCIENCE", "23101"),
+  ); // 제1공학관
+  assert.equal(
+    buildingKey("SCIENCE", "61101"),
+    buildingKey("SCIENCE", "62101"),
+  ); // 생명공학관
+  assert.notEqual(
+    buildingKey("SCIENCE", "21101"),
+    buildingKey("SCIENCE", "25101"),
   );
 });
 
@@ -53,56 +58,9 @@ test("seed distribution around the demo timetable matches the PRD (2 with ≥3, 
   assert.equal(sameDepartment.length, 23);
 });
 
-test("the other campus is excluded regardless of score", () => {
-  const results = rankMatches(me, SEED_PROFILES);
-  assert.ok(results.every((result) => result.campus === "HUMANITIES"));
-  assert.ok(!results.some((result) => result.nickname === "우주"));
-  assert.equal(results.length, seedProfilesOn("HUMANITIES").length);
-  assert.equal(seedProfilesOn("HUMANITIES").length, 29);
-  assert.equal(seedProfilesOn("SCIENCE").length, 29);
-});
-
-test("the 자과캠 demo has its own courses and the same match shape", () => {
-  const science: Profile = {
-    memberId: "me-s",
-    nickname: "나",
-    includeOtherDepartments: false,
-    ...DEMO_PRESETS.SCIENCE,
-  };
-  // Different subjects and professors, not just different rooms.
-  const humanitiesSubjects = new Set(
-    DEMO_PRESETS.HUMANITIES.instances.map((i) => i.subject),
-  );
-  const scienceSubjects = new Set(
-    DEMO_PRESETS.SCIENCE.instances.map((i) => i.subject),
-  );
-  assert.ok(
-    [...scienceSubjects].some((subject) => !humanitiesSubjects.has(subject)),
-  );
-  assert.notEqual(
-    DEMO_PRESETS.SCIENCE.instances[0].professor,
-    DEMO_PRESETS.HUMANITIES.instances[0].professor,
-  );
-
-  const results = rankMatches(science, SEED_PROFILES);
-  assert.ok(results.every((result) => result.campus === "SCIENCE"));
-  assert.equal(results.length, 29);
-  const sameDepartment = results.filter(
-    (r) => r.department === science.department,
-  );
-  const shared = sameDepartment.map((r) => r.sameRoom.length);
-  assert.equal(shared.filter((count) => count >= 3).length, 2);
-  assert.equal(shared.filter((count) => count === 1 || count === 2).length, 8);
-  assert.equal(results[0].nickname, "우주");
-  assert.equal(
-    results[0].dailySummary.WED,
-    "2교시 같이 듣기 → 공강 1시간 → 4교시 같이 듣기 → 공강 1시간 → 6교시 같이 듣기",
-  );
-});
-
-test("하늘 ranks first and the Wednesday summary reads class → gap → class", () => {
+test("우주 ranks first and the Wednesday summary reads class → gap → class", () => {
   const [top] = rankMatches(me, SEED_PROFILES);
-  assert.equal(top.nickname, "하늘");
+  assert.equal(top.nickname, "우주");
   assert.equal(top.proximity, "ROOM");
   assert.ok(top.sharedFreeDays.includes("WED"));
   assert.equal(
@@ -155,12 +113,12 @@ test("same building on the same floor scores higher than a different floor", () 
   const sameFloor: Profile = {
     ...me,
     memberId: "floor",
-    instances: instancesOf(["MAJOR2_D"]), // 32303, TUE/THU 2 — 데모 MAJOR3_A는 32301
+    instances: instancesOf(["MAJOR2_D"]), // 26303, TUE/THU 2 — 데모 MAJOR3_A는 26301
   };
   const otherFloor: Profile = {
     ...me,
     memberId: "other",
-    instances: instancesOf(["MAJOR3_B"]), // 32302, MON/WED 4 — 데모 MAJOR2_A는 32205
+    instances: instancesOf(["MAJOR3_B"]), // 26302, MON/WED 4 — 데모 MAJOR2_A는 26205
   };
   const a = scorePair(me, sameFloor);
   const b = scorePair(me, otherFloor);
@@ -168,7 +126,7 @@ test("same building on the same floor scores higher than a different floor", () 
   assert.ok(a.sameBuilding.every((overlap) => overlap.sameFloor));
   assert.ok(b.sameBuilding.every((overlap) => !overlap.sameFloor));
   assert.ok(a.raw.score > b.raw.score);
-  assert.equal(a.reasons[1], "같은 건물 다른 강의실 2교시 (다산경제관)");
+  assert.equal(a.reasons[1], "같은 건물 다른 강의실 2교시 (제2공학관)");
   // No building overlap → the line is simply absent, never "없음" next to shared classes.
   assert.equal(b.reasons.length, 3);
   assert.ok(
@@ -204,7 +162,7 @@ function mondayProfile(
     memberId: id,
     nickname: id,
     department: "d",
-    campus: "HUMANITIES",
+    campus: "SCIENCE",
     includeOtherDepartments: false,
     instances: rows.map(([subject, start, end, room]) => ({
       subject,
@@ -221,11 +179,11 @@ test("a gap between shared classes is just 공강, whatever sits around it", () 
   const a = mondayProfile("a", [
     ["공유", 2, 2, "31101"],
     ["나만", 3, 3, "32101"],
-    ["끝", 5, 5, "33101"],
+    ["끝", 5, 5, "21101"],
   ]);
   const b = mondayProfile("b", [
     ["공유", 2, 2, "31101"],
-    ["끝", 5, 5, "50101"],
+    ["끝", 5, 5, "51101"],
   ]);
   const gap = scorePair(a, b);
   assert.equal(gap.raw.breakdown.sharedFree, 0.15); // period 4 only

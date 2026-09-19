@@ -29,11 +29,12 @@ export const PERIOD_TIMES: Record<number, { start: string; end: string }> = {
   10: { start: "22:30", end: "23:45" },
 };
 
-export const CAMPUSES = ["HUMANITIES", "SCIENCE"] as const;
+// Single campus by team decision: the app serves 자과캠(율전) only, so nothing in the UI
+// asks about campus. The field stays in the data model so a second campus can return later.
+export const CAMPUSES = ["SCIENCE"] as const;
 export type Campus = (typeof CAMPUSES)[number];
 
 export const CAMPUS_LABELS: Record<Campus, string> = {
-  HUMANITIES: "인사캠 (명륜)",
   SCIENCE: "자과캠 (율전)",
 };
 
@@ -74,15 +75,6 @@ export function courseKey(instance: CourseInstance): string {
 // Building codes reuse the same two digits across campuses, so the table is keyed by campus.
 // One building can own several codes (e.g. 제1공학관 = 21·22·23), so grouping uses the name.
 export const BUILDINGS: Record<Campus, Record<string, string>> = {
-  HUMANITIES: {
-    "20": "법학관",
-    "31": "퇴계인문관",
-    "32": "다산경제관",
-    "33": "경영관",
-    "50": "호암관",
-    "61": "수선관",
-    "62": "수선관",
-  },
   SCIENCE: {
     "05": "수성관",
     "21": "제1공학관",
