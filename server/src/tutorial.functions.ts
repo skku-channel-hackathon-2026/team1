@@ -371,30 +371,26 @@ export class TutorialFunctions {
     plainText: string,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
     const channelId = ctx.channel.id;
-    const raw = this.nativeClient as unknown as {
-      callNativeFunctionWithToken<T>(
-        name: string,
-        params: unknown,
-        accessToken: string,
-      ): Promise<T>;
-    };
 
+    // Both calls are typed against the SDK's NativeFunctionTypeMap, so a misspelled or
+    // unsupported function name fails at compile time rather than at runtime.
     const send = async (accessToken: string) => {
-      const { directChat } = await raw.callNativeFunctionWithToken<{
-        directChat: { id: string };
-      }>(
-        "findOrCreateDirectChat",
-        { channelId, managerIds: [fromManagerId, toManagerId] },
-        accessToken,
-      );
-      await this.nativeClient
-        .createProxyApi(accessToken)
-        .writeDirectChatMessageAsManager({
+      const { directChat } =
+        await this.nativeClient.callNativeFunctionWithToken(
+          "findOrCreateDirectChat",
+          { channelId, managerIds: [fromManagerId, toManagerId] },
+          accessToken,
+        );
+      await this.nativeClient.callNativeFunctionWithToken(
+        "writeDirectChatMessageAsManager",
+        {
           channelId,
           directChatId: directChat.id,
           broadcast: false,
           dto: { plainText, managerId: fromManagerId },
-        });
+        },
+        accessToken,
+      );
     };
 
     // The platform's "credentials have changed" 401 fits a cached token that no longer matches
