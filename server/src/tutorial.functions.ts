@@ -370,39 +370,73 @@ export class TutorialFunctions {
     toManagerId: string,
     plainText: string,
   ): Promise<{ ok: true } | { ok: false; error: string }> {
-    let step = "token";
-    try {
-      const channelId = ctx.channel.id;
-      const token = await this.tokenManager.getChannelToken({ channelId });
-      const raw = this.nativeClient as unknown as {
-        callNativeFunctionWithToken<T>(
-          name: string,
-          params: unknown,
-          accessToken: string,
-        ): Promise<T>;
-      };
-      step = "findOrCreateDirectChat";
+    const channelId = ctx.channel.id;
+    const raw = this.nativeClient as unknown as {
+      callNativeFunctionWithToken<T>(
+        name: string,
+        params: unknown,
+        accessToken: string,
+      ): Promise<T>;
+    };
+
+    const send = async (accessToken: string) => {
       const { directChat } = await raw.callNativeFunctionWithToken<{
         directChat: { id: string };
       }>(
         "findOrCreateDirectChat",
         { channelId, managerIds: [fromManagerId, toManagerId] },
-        token.accessToken,
+        accessToken,
       );
-      const api = this.nativeClient.createProxyApi(token.accessToken);
-      step = "writeDirectChatMessageAsManager";
-      await api.writeDirectChatMessageAsManager({
-        channelId,
-        directChatId: directChat.id,
-        broadcast: false,
-        dto: { plainText, managerId: fromManagerId },
-      });
-      return { ok: true };
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : JSON.stringify(error);
-      console.error(`[같은 반] DM failed at ${step}: ${message}`);
-      return { ok: false, error: `${step}: ${message}`.slice(0, 300) };
+      await this.nativeClient
+        .createProxyApi(accessToken)
+        .writeDirectChatMessageAsManager({
+          channelId,
+          directChatId: directChat.id,
+          broadcast: false,
+          dto: { plainText, managerId: fromManagerId },
+        });
+    };
+
+    // The platform's "credentials have changed" 401 fits a cached token that no longer matches
+    // the app's current settings, so the retry ladder is: cached channel token → freshly issued
+    // channel token → app token. Each attempt's failure is kept so the WAM can show all of them.
+    const attempts: { label: string; token: () => Promise<string> }[] = [
+      {
+        label: "channel token",
+        token: async () =>
+          (await this.tokenManager.getChannelToken({ channelId })).accessToken,
+      },
+      {
+        label: "fresh channel token",
+        token: async () => {
+          await this.tokenManager.invalidateChannelToken(channelId);
+          return (await this.tokenManager.getChannelToken({ channelId }))
+            .accessToken;
+        },
+      },
+      {
+        label: "app token",
+        token: async () => {
+          await this.tokenManager.invalidateAppToken();
+          return (await this.tokenManager.getAppToken()).accessToken;
+        },
+      },
+    ];
+
+    const failures: string[] = [];
+    for (const attempt of attempts) {
+      try {
+        await send(await attempt.token());
+        return { ok: true };
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : JSON.stringify(error);
+        console.error(`[같은 반] DM failed with ${attempt.label}: ${message}`);
+        failures.push(`${attempt.label}: ${message.slice(0, 160)}`);
+        // Only an auth failure is worth retrying with a different token.
+        if (!/401|unauthenticated|credentials/i.test(message)) break;
+      }
     }
+    return { ok: false, error: failures.join(" | ").slice(0, 500) };
   }
 }
