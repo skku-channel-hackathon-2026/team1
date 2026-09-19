@@ -34,7 +34,7 @@ export interface TimetableGridProps {
 
 const START_HOUR = 9
 const MIN_END_HOUR = 18
-const HOUR_HEIGHT = 60
+const HOUR_HEIGHT = 52
 const MINI_HOUR_HEIGHT = 6
 const ANIMATION_TOTAL_MS = 400
 

@@ -20,14 +20,23 @@ import './sameClass.css'
 
 type Screen = 'LOADING' | 'INPUT' | 'LIST' | 'OVERLAY'
 
-// Ask Desk for as much room as it will give; it clamps to the available viewport.
-// The timetable is the main surface, so every screen wants the full window.
-const FULL = { width: 1400, height: 1000 }
-const SIZES: Record<Screen, { width: number; height: number }> = {
-  LOADING: FULL,
-  INPUT: FULL,
-  LIST: FULL,
-  OVERLAY: FULL,
+// Desk does NOT clamp an oversized request — it builds the window we ask for and the
+// overflow ends up off-screen with no way to scroll to it. So derive the request from the
+// monitor and stay well inside it. Caps keep the window sane on very large displays.
+const MIN_SIZE = { width: 640, height: 460 }
+const MAX_SIZE = { width: 1080, height: 720 }
+
+function preferredSize(): { width: number; height: number } {
+  const screen = typeof window === 'undefined' ? undefined : window.screen
+  const availWidth = screen?.availWidth || 1280
+  const availHeight = screen?.availHeight || 800
+  const clamp = (value: number, min: number, max: number) =>
+    Math.round(Math.min(Math.max(value, min), max))
+  return {
+    // Desk's own chrome and the chat list take the left half of the screen.
+    width: clamp(availWidth * 0.55, MIN_SIZE.width, MAX_SIZE.width),
+    height: clamp(availHeight * 0.62, MIN_SIZE.height, MAX_SIZE.height),
+  }
 }
 
 const EMPTY_DRAFT: ProfileInput = {
@@ -112,9 +121,10 @@ export function SameClassApp() {
     name: TUTORIAL_FUNCTIONS.requestMatch,
   })
 
+  // One size for every screen: re-requesting on each transition makes Desk jump.
   useEffect(() => {
-    setSize(SIZES[screen])
-  }, [screen, setSize])
+    setSize(preferredSize())
+  }, [setSize])
 
   const runMatch = useCallback(async () => {
     const output = await match.call({})
